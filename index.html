@@ -91,6 +91,7 @@ function normalizeIntrinsic(x, y) {
     var a12 = (-skew / (fx * fy));
     var a13 = ((skew * cy - cx * fy) / (fx * fy));
     var a22 = (1.0 / fy);
+    var a23 = (-cy / fy);
 
     return {
         x: a11 * x + a12 * y + a13,
@@ -112,12 +113,12 @@ bde-af  bc bdf+ae
 // default yaw=0, pitch=0, roll=0
 function multiplyRotation(x, y, yaw, pitch, roll) {
     // Rx(roll) * Rz(yaw) * Ry(pitch)
-    var a = cos(roll),
-        b = sin(roll);
-    var e = cos(pitch),
-        f = sin(pitch);
-    var c = cos(yaw),
-        d = sin(yaw);
+    var a = Math.cos(roll),
+        b = Math.sin(roll);
+    var e = Math.cos(pitch),
+        f = Math.sin(pitch);
+    var c = Math.cos(yaw),
+        d = Math.sin(yaw);
 
     var X = (c * e) * x - (d) * y + (c * f) * 1;
     var Y = (a * d * e + b * f) * x + (a * c) * y + (a * d * f - b * e) * 1;
@@ -139,9 +140,12 @@ function normToLatlon(x, y, z) {
 }
 
 function latlonToEqui(lat, lon) {
+    var x = wrapZeroToOne(lon / (Math.PI*2) + 0.5) * srcWidth;
+    var y = reflectZeroToOne(lat / (Math.PI*2) + 0.5) * (srcHeight - 1);
+    y = srcHeight - y - 1;
     return {
-        x: wrapZeroToOne(lat),
-        y: srcHeight - reflectZeroToOne(lon) - 1
+        x: x,
+        y: y
     }
 }
 
