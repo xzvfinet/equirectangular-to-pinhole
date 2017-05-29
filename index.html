@@ -4,7 +4,8 @@
 <head>
     <title></title>
     <!-- <script src="https://aframe.io/releases/0.5.0/aframe.min.js"></script> -->
-    <canvas id="mycanvas"></canvas>
+    <canvas id="src"></canvas>
+    <canvas id="dst"></canvas>
     <style type="text/css">
 
     </style>
@@ -14,9 +15,10 @@
 </body>
 <script type="text/javascript">
 var img = new Image;
-var canvas = document.getElementById("mycanvas");
-var ctx = canvas.getContext("2d");
-var src = "https://xzvfinet.github.io/equirectangular-to-pinhole/360.jpg";
+var srcCanvas = document.getElementById("src");
+var dstCanvas = document.getElementById("dst");
+var ctx = srcCanvas.getContext("2d");
+var src = "360.jpg";
 var ratio = 1;
 var drawObjects = [];
 
@@ -26,8 +28,8 @@ function loaded() {
 
     img.onload = function() {
         ratio = 1024 / img.width;
-        canvas.width = img.width * ratio;
-        canvas.height = img.height * ratio;
+        srcCanvas.width = img.width * ratio;
+        srcCanvas.height = img.height * ratio;
 
         var newImageData = ctx.createImageData(50, 50);
         var data = newImageData.data;
@@ -38,8 +40,9 @@ function loaded() {
             data[i + 3] = 255;
         }
         drawObjects.push({
-            imageData : newImageData,
-            x: 250, y: 250
+            imageData: newImageData,
+            x: 250,
+            y: 250
         });
 
         update();
@@ -52,13 +55,125 @@ function update() {
     ctx.drawImage(img, 0, 0, img.width * ratio, img.height * ratio);
 
     // draw objects
-    for (var i = 0; i < drawObjects.length; ++i){
+    for (var i = 0; i < drawObjects.length; ++i) {
         ctx.putImageData(drawObjects[i].imageData, drawObjects[i].x, drawObjects[i].y);
     }
 
     // ctx.drawImage(img, 0, 0, img.width * ratio, img.height * ratio);
     // var pixelData = ctx.getImageData(250, 250, 50, 50).data;
 
+}
+
+// Camera parameters
+var srcWidth = 7200;
+var srcHeight = 3600;
+var dstWidth = 400;
+var dstHeight = 300;
+var hfov = 80; //  in degrees
+
+function pinholeToEqui(x, y) {
+    var normalized = normalizeIntrinsic(x, y);
+    var rotated = multiplyRotation(normalized.x, normalized.y, 0, 0, 0);
+    var latlon = normToLatlon(rotated.x, rotated.y, rotated.z);
+    var equiXY = latlonToEqui(latlon.lat, latlon.lon);
+
+}
+
+function normalizeIntrinsic(x, y) {
+    var f = (dstWidth / 2.0) / Math.tan(toRadian(hfov) / 2.0);
+    var cx = dstWidth / 2;
+    var cy = dstHeight / 2;
+    var fx = f;
+    var fy = f;
+    var skew = 0;
+
+    var a11 = (1.0 / fx);
+    var a12 = (-skew / (fx * fy));
+    var a13 = ((skew * cy - cx * fy) / (fx * fy));
+    var a22 = (1.0 / fy);
+
+    return {
+        x: a11 * x + a12 * y + a13,
+        y: a22 * y + a23
+    };
+}
+
+/*
+Rx:     Ry:     Rz:
+1 0 0   e 0 f   c -d 0
+0 a -b  0 1 0   d c 0
+0 b a   -f 0 e  0 0 1
+
+Rx * Rz * Ry:
+ce      -d cf
+ade+bf  ac adf-be
+bde-af  bc bdf+ae
+*/
+// default yaw=0, pitch=0, roll=0
+function multiplyRotation(x, y, yaw, pitch, roll) {
+    // Rx(roll) * Rz(yaw) * Ry(pitch)
+    var a = cos(roll),
+        b = sin(roll);
+    var e = cos(pitch),
+        f = sin(pitch);
+    var c = cos(yaw),
+        d = sin(yaw);
+
+    var X = (c * e) * x - (d) * y + (c * f) * 1;
+    var Y = (a * d * e + b * f) * x + (a * c) * y + (a * d * f - b * e) * 1;
+    var Z = (b * d * e - a * f) * x + (b * c) * y + (b * d * f + a * e) * 1;
+
+    return {
+        x: X,
+        y: Y,
+        z: Z
+    };
+}
+
+function normToLatlon(x, y, z) {
+    var r = Math.sqrt(x * x + y * y);
+    return {
+        lon: Math.atan2(y, x),
+        lat: safeAtan(-z, r)
+    }
+}
+
+function latlonToEqui(lat, lon) {
+    return {
+        x: wrapZeroToOne(lat),
+        y: srcHeight - reflectZeroToOne(lon) - 1
+    }
+}
+
+function toRadian(val) {
+    return val * Math.PI / 180;
+}
+
+function safeAtan(y, x) {
+    if (x == 0.0) {
+        if (y >= 0.0)
+            return Math.PI / 2;
+        else
+            return -Math.PI / 2;
+    }
+    return Math.atan(y / x);
+}
+
+function wrapZeroToOne(value) {
+    if (value >= 0)
+        return value % 1.0;
+    else {
+        return (1.0 + (value % 1.0)) % 1.0;
+    }
+}
+
+function reflectZeroToOne(value) {
+    if (value < 0)
+        value = -value;
+    value = value % 2.0;
+    if (value > 1.0)
+        return 2.0 - value;
+    return value;
 }
 </script>
 
