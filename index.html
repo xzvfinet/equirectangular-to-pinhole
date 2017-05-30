@@ -4,7 +4,9 @@
 <head>
     <title></title>
     <!-- <script src="https://aframe.io/releases/0.5.0/aframe.min.js"></script> -->
-    <canvas id="src"></canvas>
+    <div onmousemove="mymousemove(event)" onclick="mymouseclick(event)">
+        <canvas id="src"></canvas>
+    </div>
     <canvas id="dst"></canvas>
     <style type="text/css">
 
@@ -17,33 +19,34 @@
 var img = new Image;
 var srcCanvas = document.getElementById("src");
 var dstCanvas = document.getElementById("dst");
-var ctx = srcCanvas.getContext("2d");
-var src = "360.jpg";
+var sctx = srcCanvas.getContext("2d");
+var dctx = dstCanvas.getContext("2d");
+var src = "360-2.jpg";
 var ratio = 1;
-var drawObjects = [];
+var correctedObj;
+
+// Camera parameters
+var srcWidth = 800;
+var srcHeight = 400;
+var dstWidth = 400;
+var dstHeight = 300;
+var hfov = 80; //  in degrees
+
+var gYaw = 0,
+    gPitch = 0,
+    gRoll = 0;
 
 function loaded() {
 
     img.crossOrigin = "Anonymous";
 
     img.onload = function() {
-        ratio = 1024 / img.width;
+        ratio = 1; //1024 / img.width;
         srcCanvas.width = img.width * ratio;
         srcCanvas.height = img.height * ratio;
 
-        var newImageData = ctx.createImageData(50, 50);
-        var data = newImageData.data;
-        for (var i = 0; i < data.length; i += 4) {
-            // data[i] = 255 - data[i]; // red
-            // data[i + 1] = 255 - data[i + 1]; // green
-            // data[i + 2] = 255 - data[i + 2]; // blue
-            data[i + 3] = 255;
-        }
-        drawObjects.push({
-            imageData: newImageData,
-            x: 250,
-            y: 250
-        });
+        dstCanvas.width = dstWidth;
+        dstCanvas.height = dstHeight;
 
         update();
     }
@@ -52,47 +55,82 @@ function loaded() {
 
 function update() {
     // draw 360 image
-    ctx.drawImage(img, 0, 0, img.width * ratio, img.height * ratio);
+    sctx.drawImage(img, 0, 0, img.width * ratio, img.height * ratio);
 
-    // draw objects
-    for (var i = 0; i < drawObjects.length; ++i) {
-        ctx.putImageData(drawObjects[i].imageData, drawObjects[i].x, drawObjects[i].y);
+    var imageData = dctx.createImageData(dstWidth, dstHeight);
+    var data = imageData.data;
+    var pixMap = [];
+    var index = 0;
+    console.log('start');
+
+    for (var row = 0; row < dstHeight; ++row) {
+        for (var col = 0; col < dstWidth; ++col) {
+            var equi = pinholeToEqui(col, row);
+            equi.x = Math.round(equi.x);
+            equi.y = Math.round(equi.y);
+            pixMap[index++] = equi;
+        }
     }
 
-    // ctx.drawImage(img, 0, 0, img.width * ratio, img.height * ratio);
-    // var pixelData = ctx.getImageData(250, 250, 50, 50).data;
+    var size = dstWidth * dstHeight;
+    for (var ind = 0; ind < size; ind += 4) {
+        equi = pixMap[ind];
+        console.log(equi);
+        x = equi.x;
+        y = equi.y;
+
+        data[ind + 0] = sctx.getImageData(x, y, 1, 1).data[0];
+        data[ind + 1] = sctx.getImageData(x, y, 1, 1).data[1];
+        data[ind + 2] = sctx.getImageData(x, y, 1, 1).data[2];
+        data[ind + 3] = sctx.getImageData(x, y, 1, 1).data[3];
+    }
+
+    dctx.putImageData(imageData, 0, 0);
 
 }
 
-// Camera parameters
-var srcWidth = 7200;
-var srcHeight = 3600;
-var dstWidth = 400;
-var dstHeight = 300;
-var hfov = 80; //  in degrees
+function mymousemove(event) {
+    // var a = equiToLatlon(event.clientX, event.clientY);
+    // console.log(a);
+}
 
-function pinholeToEqui(x, y) {
+function mymouseclick(event) {
+    var a = equiToLatlon(event.clientX, event.clientY);
+    setDirection(a.lon, a.lat, 0);
+    update();
+    console.log(a);
+}
+
+window.pinholeToEqui = function(x, y) {
     var normalized = normalizeIntrinsic(x, y);
-    var rotated = multiplyRotation(normalized.x, normalized.y, 0, 0, 0);
+    // console.log('normalized');
+    // console.log(normalized);
+    var rotated = multiplyRotation(normalized.x, normalized.y, gYaw, gPitch, gRoll);
+    // console.log('rotated');
+    // console.log(rotated);
     var latlon = normToLatlon(rotated.x, rotated.y, rotated.z);
+    // console.log('latlon');
+    // console.log(latlon);
     var equiXY = latlonToEqui(latlon.lat, latlon.lon);
-
+    // console.log('equiXY');
+    // console.log(equiXY);
+    return equiXY;
 }
+
+var f = (dstWidth / 2.0) / Math.tan(toRadian(hfov) / 2.0);
+var cx = dstWidth / 2;
+var cy = dstHeight / 2;
+var fx = f;
+var fy = f;
+var skew = 0;
+
+var a11 = (1.0 / fx);
+var a12 = (-skew / (fx * fy));
+var a13 = ((skew * cy - cx * fy) / (fx * fy));
+var a22 = (1.0 / fy);
+var a23 = (-cy / fy);
 
 function normalizeIntrinsic(x, y) {
-    var f = (dstWidth / 2.0) / Math.tan(toRadian(hfov) / 2.0);
-    var cx = dstWidth / 2;
-    var cy = dstHeight / 2;
-    var fx = f;
-    var fy = f;
-    var skew = 0;
-
-    var a11 = (1.0 / fx);
-    var a12 = (-skew / (fx * fy));
-    var a13 = ((skew * cy - cx * fy) / (fx * fy));
-    var a22 = (1.0 / fy);
-    var a23 = (-cy / fy);
-
     return {
         x: a11 * x + a12 * y + a13,
         y: a22 * y + a23
@@ -109,6 +147,11 @@ Rx * Rz * Ry:
 ce      -d cf
 ade+bf  ac adf-be
 bde-af  bc bdf+ae
+
+Rx * Rz * Ry * (PI/2):
+(-d)*x + (cf    )*y + (ce)*1
+(ac)*x + (adf-be)*y + (ade+bf)*1
+(bc)*x + (bdf+ae)*y + (bde-af)*1
 */
 // default yaw=0, pitch=0, roll=0
 function multiplyRotation(x, y, yaw, pitch, roll) {
@@ -120,9 +163,12 @@ function multiplyRotation(x, y, yaw, pitch, roll) {
     var c = Math.cos(yaw),
         d = Math.sin(yaw);
 
-    var X = (c * e) * x - (d) * y + (c * f) * 1;
-    var Y = (a * d * e + b * f) * x + (a * c) * y + (a * d * f - b * e) * 1;
-    var Z = (b * d * e - a * f) * x + (b * c) * y + (b * d * f + a * e) * 1;
+    // var X = (c * e) * x - (d) * y + (c * f) * 1;
+    // var Y = (a * d * e + b * f) * x + (a * c) * y + (a * d * f - b * e) * 1;
+    // var Z = (b * d * e - a * f) * x + (b * c) * y + (b * d * f + a * e) * 1;
+    var X = (-d) * x + (c * f) * y + (c * e) * 1;
+    var Y = (a * c) * x + (a * d * f - b * e) * y + (a * d * e + b * f) * 1;
+    var Z = (b * c) * x + (b * d * f + a * e) * y + (b * d * e - a * f) * 1;
 
     return {
         x: X,
@@ -140,8 +186,8 @@ function normToLatlon(x, y, z) {
 }
 
 function latlonToEqui(lat, lon) {
-    var x = wrapZeroToOne(lon / (Math.PI*2) + 0.5) * srcWidth;
-    var y = reflectZeroToOne(lat / (Math.PI*2) + 0.5) * (srcHeight - 1);
+    var x = wrapZeroToOne(lon / (Math.PI * 2) + 0.5) * srcWidth;
+    var y = reflectZeroToOne(lat / Math.PI + 0.5) * (srcHeight - 1);
     y = srcHeight - y - 1;
     return {
         x: x,
@@ -149,11 +195,26 @@ function latlonToEqui(lat, lon) {
     }
 }
 
+function equiToLatlon(x, y) {
+    var lon = (x / srcWidth - 0.5) * Math.PI * 2;
+    var lat = ((srcHeight - y - 1.0) / (srcHeight - 1) - 0.5) * Math.PI;
+    return {
+        lon: lon,
+        lat: lat
+    }
+}
+
+function setDirection(yaw, pitch, roll) {
+    gYaw = yaw;
+    gPitch = pitch;
+    gRoll = roll;
+}
+
 function toRadian(val) {
     return val * Math.PI / 180;
 }
 
-function safeAtan(y, x) {
+window.safeAtan = function(y, x) {
     if (x == 0.0) {
         if (y >= 0.0)
             return Math.PI / 2;
@@ -179,6 +240,7 @@ function reflectZeroToOne(value) {
         return 2.0 - value;
     return value;
 }
+
 </script>
 
 </html>
