@@ -26,8 +26,8 @@ var ratio = 1;
 var correctedObj;
 
 // Camera parameters
-var srcWidth = 800;
-var srcHeight = 400;
+var srcWidth = 1024;
+var srcHeight = 512;
 var dstWidth = 400;
 var dstHeight = 300;
 var hfov = 80; //  in degrees
@@ -72,10 +72,10 @@ function update() {
         }
     }
 
-    var size = dstWidth * dstHeight;
+    var size = 4 * dstWidth * dstHeight;
     for (var ind = 0; ind < size; ind += 4) {
-        equi = pixMap[ind];
-        console.log(equi);
+        equi = pixMap[ind/4];
+        // console.log(equi);
         x = equi.x;
         y = equi.y;
 
@@ -240,7 +240,6 @@ function reflectZeroToOne(value) {
         return 2.0 - value;
     return value;
 }
-
 </script>
 
 </html>
