@@ -14,14 +14,18 @@
         height: 30px;
         background-color: green;
     }
+    
+    #main {
+        display: inline-block
+    }
     </style>
 </head>
 
 <body onload="loaded()">
-    <div id="myProgress">
-        <div id="myBar"></div>
-    </div>
-    <div onmousemove="mymousemove(event)" onclick="mymouseclick(event)">
+    <div id="main" onmousemove="mymousemove(event)" onclick="mymouseclick(event)">
+        <div id="myProgress">
+            <div id="myBar"></div>
+        </div>
         <canvas id="src"></canvas>
     </div>
     <canvas id="dst"></canvas>
