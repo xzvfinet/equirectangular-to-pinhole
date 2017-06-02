@@ -3,17 +3,28 @@
 
 <head>
     <title></title>
-    <!-- <script src="https://aframe.io/releases/0.5.0/aframe.min.js"></script> -->
-    <div onmousemove="mymousemove(event)" onclick="mymouseclick(event)">
-        <canvas id="src"></canvas>
-    </div>
-    <canvas id="dst"></canvas>
     <style type="text/css">
-
+    #myProgress {
+        width: 100%;
+        background-color: grey;
+    }
+    
+    #myBar {
+        width: 1%;
+        height: 30px;
+        background-color: green;
+    }
     </style>
 </head>
 
 <body onload="loaded()">
+    <div id="myProgress">
+        <div id="myBar"></div>
+    </div>
+    <div onmousemove="mymousemove(event)" onclick="mymouseclick(event)">
+        <canvas id="src"></canvas>
+    </div>
+    <canvas id="dst"></canvas>
 </body>
 <script type="text/javascript">
 var img = new Image;
@@ -25,13 +36,15 @@ var src = "360-2.jpg";
 var ratio = 1;
 var correctedObj;
 
+var barEl = document.getElementById("myBar");
+
+
 // Camera parameters
 var srcWidth = 1024;
 var srcHeight = 512;
 var dstWidth = 400;
 var dstHeight = 300;
 var hfov = 80; //  in degrees
-
 var gYaw = 0,
     gPitch = 0,
     gRoll = 0;
@@ -58,35 +71,37 @@ function update() {
     sctx.drawImage(img, 0, 0, img.width * ratio, img.height * ratio);
 
     var imageData = dctx.createImageData(dstWidth, dstHeight);
-    var data = imageData.data;
-    var pixMap = [];
-    var index = 0;
+    console.log(imageData);
+
     console.log('start');
 
-    for (var row = 0; row < dstHeight; ++row) {
-        for (var col = 0; col < dstWidth; ++col) {
-            var equi = pinholeToEqui(col, row);
-            equi.x = Math.round(equi.x);
-            equi.y = Math.round(equi.y);
-            pixMap[index++] = equi;
+    var counter = new Worker("equiprocess.js");
+
+    counter.addEventListener("message", function(event) {
+        if (event.data.finished) {
+            console.log(event.data.dstData);
+            dctx.putImageData(event.data.dstData, 0, 0);
+            console.log('finished');
+        } else {
+            move();
+            console.log('merong:' + event.data.counter);
         }
-    }
+    });
+    // window.srcData = sctx.getImageData(0,0,srcWidth, srcHeight);
 
-    var size = 4 * dstWidth * dstHeight;
-    for (var ind = 0; ind < size; ind += 4) {
-        equi = pixMap[ind/4];
-        // console.log(equi);
-        x = equi.x;
-        y = equi.y;
-
-        data[ind + 0] = sctx.getImageData(x, y, 1, 1).data[0];
-        data[ind + 1] = sctx.getImageData(x, y, 1, 1).data[1];
-        data[ind + 2] = sctx.getImageData(x, y, 1, 1).data[2];
-        data[ind + 3] = sctx.getImageData(x, y, 1, 1).data[3];
-    }
-
-    dctx.putImageData(imageData, 0, 0);
-
+    // Camera parameters
+    counter.postMessage({
+        srcData: sctx.getImageData(0, 0, srcWidth, srcHeight),
+        dstData: imageData,
+        srcWidth: srcWidth,
+        srcHeight: srcHeight,
+        dstWidth: dstWidth,
+        dstHeight: dstHeight,
+        hfov: hfov, //  in degrees
+        gYaw: gYaw,
+        gPitch: gPitch,
+        gRoll: gRoll
+    });
 }
 
 function mymousemove(event) {
@@ -97,102 +112,8 @@ function mymousemove(event) {
 function mymouseclick(event) {
     var a = equiToLatlon(event.clientX, event.clientY);
     setDirection(a.lon, a.lat, 0);
+    move(1);
     update();
-    console.log(a);
-}
-
-window.pinholeToEqui = function(x, y) {
-    var normalized = normalizeIntrinsic(x, y);
-    // console.log('normalized');
-    // console.log(normalized);
-    var rotated = multiplyRotation(normalized.x, normalized.y, gYaw, gPitch, gRoll);
-    // console.log('rotated');
-    // console.log(rotated);
-    var latlon = normToLatlon(rotated.x, rotated.y, rotated.z);
-    // console.log('latlon');
-    // console.log(latlon);
-    var equiXY = latlonToEqui(latlon.lat, latlon.lon);
-    // console.log('equiXY');
-    // console.log(equiXY);
-    return equiXY;
-}
-
-var f = (dstWidth / 2.0) / Math.tan(toRadian(hfov) / 2.0);
-var cx = dstWidth / 2;
-var cy = dstHeight / 2;
-var fx = f;
-var fy = f;
-var skew = 0;
-
-var a11 = (1.0 / fx);
-var a12 = (-skew / (fx * fy));
-var a13 = ((skew * cy - cx * fy) / (fx * fy));
-var a22 = (1.0 / fy);
-var a23 = (-cy / fy);
-
-function normalizeIntrinsic(x, y) {
-    return {
-        x: a11 * x + a12 * y + a13,
-        y: a22 * y + a23
-    };
-}
-
-/*
-Rx:     Ry:     Rz:
-1 0 0   e 0 f   c -d 0
-0 a -b  0 1 0   d c 0
-0 b a   -f 0 e  0 0 1
-
-Rx * Rz * Ry:
-ce      -d cf
-ade+bf  ac adf-be
-bde-af  bc bdf+ae
-
-Rx * Rz * Ry * (PI/2):
-(-d)*x + (cf    )*y + (ce)*1
-(ac)*x + (adf-be)*y + (ade+bf)*1
-(bc)*x + (bdf+ae)*y + (bde-af)*1
-*/
-// default yaw=0, pitch=0, roll=0
-function multiplyRotation(x, y, yaw, pitch, roll) {
-    // Rx(roll) * Rz(yaw) * Ry(pitch)
-    var a = Math.cos(roll),
-        b = Math.sin(roll);
-    var e = Math.cos(pitch),
-        f = Math.sin(pitch);
-    var c = Math.cos(yaw),
-        d = Math.sin(yaw);
-
-    // var X = (c * e) * x - (d) * y + (c * f) * 1;
-    // var Y = (a * d * e + b * f) * x + (a * c) * y + (a * d * f - b * e) * 1;
-    // var Z = (b * d * e - a * f) * x + (b * c) * y + (b * d * f + a * e) * 1;
-    var X = (-d) * x + (c * f) * y + (c * e) * 1;
-    var Y = (a * c) * x + (a * d * f - b * e) * y + (a * d * e + b * f) * 1;
-    var Z = (b * c) * x + (b * d * f + a * e) * y + (b * d * e - a * f) * 1;
-
-    return {
-        x: X,
-        y: Y,
-        z: Z
-    };
-}
-
-function normToLatlon(x, y, z) {
-    var r = Math.sqrt(x * x + y * y);
-    return {
-        lon: Math.atan2(y, x),
-        lat: safeAtan(-z, r)
-    }
-}
-
-function latlonToEqui(lat, lon) {
-    var x = wrapZeroToOne(lon / (Math.PI * 2) + 0.5) * srcWidth;
-    var y = reflectZeroToOne(lat / Math.PI + 0.5) * (srcHeight - 1);
-    y = srcHeight - y - 1;
-    return {
-        x: x,
-        y: y
-    }
 }
 
 function equiToLatlon(x, y) {
@@ -210,35 +131,16 @@ function setDirection(yaw, pitch, roll) {
     gRoll = roll;
 }
 
-function toRadian(val) {
-    return val * Math.PI / 180;
-}
+var width = 1;
 
-window.safeAtan = function(y, x) {
-    if (x == 0.0) {
-        if (y >= 0.0)
-            return Math.PI / 2;
-        else
-            return -Math.PI / 2;
+function move(val) {
+    if (val) {
+        width = val;
+        barEl.style.width = width / 2 + '%';
+    } else {
+        width++;
+        barEl.style.width = width / 2 + '%';
     }
-    return Math.atan(y / x);
-}
-
-function wrapZeroToOne(value) {
-    if (value >= 0)
-        return value % 1.0;
-    else {
-        return (1.0 + (value % 1.0)) % 1.0;
-    }
-}
-
-function reflectZeroToOne(value) {
-    if (value < 0)
-        value = -value;
-    value = value % 2.0;
-    if (value > 1.0)
-        return 2.0 - value;
-    return value;
 }
 </script>
 
