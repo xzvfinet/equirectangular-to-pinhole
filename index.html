@@ -4,6 +4,18 @@
 <head>
     <title></title>
     <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha256-k2WSCIexGzOj3Euiig+TlR8gA0EmPjuc79OEeY5L45g=" crossorigin="anonymous"></script>
+    <style type="text/css">
+    #myProgress {
+        width: 100%;
+        background-color: grey;
+    }
+    
+    #myBar {
+        width: 1%;
+        height: 30px;
+        background-color: green;
+    }
+    </style>
 </head>
 
 <body onload="loaded()">
@@ -21,15 +33,15 @@
             <div id="step1">
                 <h2>Step1.</h2>
                 <p>Original Image - Select region to extract.</p>
-                <div id="myProgress">
-                    <div id="myBar"></div>
-                </div>
                 <canvas id="canvas-360" onclick="mymouseclick(event)"></canvas>
                 <p><a id="dl-orig" download="canvas_original.png" href="#">Download</a></p>
             </div>
             <div id="step2">
                 <h2>Step2.</h2>
                 <p>Extracted Image</p>
+                <div id="myProgress">
+                    <div id="myBar"></div>
+                </div>
                 <canvas id="base-canvas"></canvas>
                 <p><a id="dl-base" download="canvas_base.png" href="#">Download</a></p>
             </div>

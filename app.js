@@ -2,7 +2,7 @@ var currentStep = 0;
 var MAX_STEP_NUM = 3;
 
 var worker = null;
-var image_set = { base: "360.jpg" };
+var image_set = { base: "360.png" };
 
 // Div
 var steps = [
@@ -46,10 +46,6 @@ window.onload = function() {
 
     orig_img = new Image;
     orig_img.onload = function() {
-        // var parentHeight = $("#step1").height();
-        // console.log(parentHeight);
-        // ratio = parentHeight / orig_img.height;
-
         ratio = 1024 / orig_img.width;
 
         resized_canvas.width = 1024;
@@ -60,7 +56,7 @@ window.onload = function() {
         orig_canvas.height = orig_img.height;
 
         // drawImageAntialiasing(orig_img, orig_img.width, orig_img.height, orig_ctx);
-        orig_ctx.drawImage(orig_img, 0, 0, orig_img.width, orig_img.height);
+        drawImageAntialiasing(orig_img, orig_img.width, orig_img.height, orig_ctx);
 
         // draw resized image
         // drawImageAntialiasing(orig_img, orig_img.width * ratio, orig_img.height * ratio, resized_ctx);
@@ -139,7 +135,6 @@ function onmessage(event) {
         switch (event.data.direction) {
             case "forward":
                 base_ctx.putImageData(result.dstData, 0, 0);
-                update360();
 
                 break;
             case "backward":
@@ -147,19 +142,9 @@ function onmessage(event) {
                 // back to equirectangular
                 result_resized_canvas.width = resized_canvas.width;
                 result_resized_canvas.height = resized_canvas.height;
-                // result_resized_ctx.drawImage(event.data.resultData, 0, 0, result_resized_canvas.width, result_resized_canvas.height);
-                console.log(result_resized_canvas);
-
-                // var newCanvas = $("<canvas>")
-                //     .attr("width", result.resultData.width)
-                //     .attr("height", result.resultData.height)[0];
-                // newCanvas.getContext("2d").putImageData(result.resultData, 0, 0);
-                // result_resized_ctx.drawImage(newCanvas, 0, 0);
 
                 result_resized_ctx.putImageData(result.resultData, 0, 0);
 
-                // result_resized_ctx.scale(1/ratio, 1/ratio);
-                // result_resized_ctx.putImageData(result_ctx.getImageData(0, 0, result_canvas.width, result_canvas.height), 0, 0);
                 break;
             case "unit":
                 corners = result.equiPoints;
@@ -252,6 +237,15 @@ function nextStep() {
     if (currentStep == MAX_STEP_NUM - 1)
         return;
 
+    switch (currentStep) {
+        case 0:
+            updateBase();
+            break;
+        case 1:
+            update360();
+            break;
+    }
+
     steps[currentStep].hidden = true;
     steps[++currentStep].hidden = false;
 
@@ -273,7 +267,6 @@ function mymouseclick(event) {
     clearCanvas();
 
     updateFrame();
-    updateBase();
 }
 
 function clearCanvas() {

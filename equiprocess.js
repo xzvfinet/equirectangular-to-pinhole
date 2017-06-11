@@ -128,17 +128,9 @@ self.addEventListener("message", function(event) {
 
 function pinholeToEqui(x, y) {
     var normalized = normalizeIntrinsic(x, y);
-    // console.log('normalized');
-    // console.log(normalized);
     var rotated = multiplyRotation(normalized.x, normalized.y);
-    // console.log('rotated');
-    // console.log(rotated);
     var latlon = normToLatlon(rotated.x, rotated.y, rotated.z);
-    // console.log('latlon');
-    // console.log(latlon);
     var equiXY = latlonToEqui(latlon.lat, latlon.lon);
-    // console.log('equiXY');
-    // console.log(equiXY);
     return equiXY;
 }
 
