@@ -23,8 +23,10 @@ self.addEventListener("message", function(event) {
     var length = param.dstHeight / 100;
     var adder = length;
 
-    if (event.data.direction == "forward") {
-        if (!event.data || !event.data.srcData) {
+    var result = {};
+
+    if (param.direction == "forward") {
+        if (!param || !param.srcData) {
             console.log('no data for worker');
             return;
         }
@@ -61,8 +63,8 @@ self.addEventListener("message", function(event) {
         };
 
         var size = 4 * param.dstWidth * param.dstHeight;
-        var dstData = event.data.dstData;
-        var srcData = event.data.srcData;
+        var dstData = param.dstData;
+        var srcData = param.srcData;
         length = size / 100;
         adder = length;
         for (var ind = 0, index = 0; ind < size; ind += 4, ++index) {
@@ -79,10 +81,13 @@ self.addEventListener("message", function(event) {
             dstData.data[ind + 3] = srcData.data[srcInd + 3];
         }
 
-        self.postMessage({ direction: "forward", finished: true, dstData: dstData });
-    } else if (event.data.direction == "backward") {
-        var mixedData = event.data.mixedData;
-        var resultData = event.data.resultData;
+        result.dstData = dstData;
+
+    } else if (param.direction == "backward") {
+        var mixedData = param.mixedData;
+        var resultData = param.resultData;
+        console.log(mixedData);
+        console.log(resultData);
 
         var index = 0;
         for (var row = 0; row < mixedData.height; ++row) {
@@ -106,8 +111,19 @@ self.addEventListener("message", function(event) {
             }
         }
 
-        self.postMessage({ direction: "backward", finished: true, resultData: resultData });
+        result.resultData = resultData;
+    } else if (param.direction == "unit") {
+        var points = param.points;
+        var equiPoints = [];
+
+        for (var i in points) {
+            equiPoints.push(pinholeToEqui(points[i].x, points[i].y));
+        }
+
+        result.equiPoints = equiPoints;
     }
+
+    self.postMessage({ direction: param.direction, finished: true, result: result });
 });
 
 function pinholeToEqui(x, y) {
