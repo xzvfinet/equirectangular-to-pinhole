@@ -1,76 +1,120 @@
 // Camera parameters
-var srcWidth = 1024;
-var srcHeight = 512;
-var dstWidth = 400;
-var dstHeight = 300;
-var hfov = 80; //  in degrees
-var gYaw = 0,
-    gPitch = 0,
-    gRoll = 0;
+var param = {};
+
+var f;
+var cx;
+var cy;
+var fx;
+var fy;
+var skew;
+var a11;
+var a12;
+var a13;
+var a22;
+var a23;
 
 self.addEventListener("message", function(event) {
     var counter = 0;
 
-    if (!event.data || !event.data.srcData) {
-        console.log('no data for worker');
-        return;
-    }
+    param = event.data;
 
-    srcWidth = event.data.srcWidth;
-    srcHeight = event.data.srcHeight;
-    dstWidth = event.data.dstWidth;
-    dstHeight = event.data.dstHeight;
-    hfov = event.data.hfov;
-    gYaw = event.data.gYaw;
-    gPitch = event.data.gPitch;
-    gRoll = event.data.gRoll;
+    calculateIntrinsic(param.dstWidth, param.dstHeight, param.hfov, 0);
 
-    var pixMap = [];
-    var index = 0;
-
-    var length = dstHeight / 100;
+    var length = param.dstHeight / 100;
     var adder = length;
-    for (var row = 0; row < dstHeight; ++row) {
-        for (var col = 0; col < dstWidth; ++col) {
-            if (row >= length) {
+
+    if (event.data.direction == "forward") {
+        if (!event.data || !event.data.srcData) {
+            console.log('no data for worker');
+            return;
+        }
+
+        var pixMap = [];
+        var index = 0;
+
+        var minVal = { x: Number.MAX_SAFE_INTEGER, y: Number.MAX_SAFE_INTEGER },
+            maxVal = { x: 0, y: 0 };
+
+        for (var row = 0; row < param.dstHeight; ++row) {
+            for (var col = 0; col < param.dstWidth; ++col) {
+                if (row >= length) {
+                    length += adder;
+                    self.postMessage({ counter: ++counter });
+                }
+
+                var equi = pinholeToEqui(col, row);
+                equi.x = Math.round(equi.x);
+                equi.y = Math.round(equi.y);
+                pixMap[index++] = equi;
+
+                // min max for original bounding box
+                if (equi.x < minVal.x) minVal.x = equi.x;
+                else if (equi.x > maxVal.x) maxVal.x = equi.x
+                if (equi.y < minVal.y) minVal.y = equi.y;
+                else if (equi.y > maxVal.y) maxVal.y = equi.y
+            }
+        }
+
+        var originalSize = {
+            x: maxVal.x - minVal.x,
+            y: maxVal.y - minVal.y
+        };
+
+        var size = 4 * param.dstWidth * param.dstHeight;
+        var dstData = event.data.dstData;
+        var srcData = event.data.srcData;
+        length = size / 100;
+        adder = length;
+        for (var ind = 0, index = 0; ind < size; ind += 4, ++index) {
+            if (ind >= length) {
                 length += adder;
                 self.postMessage({ counter: ++counter });
             }
+            equi = pixMap[index];
 
-            var equi = pinholeToEqui(col, row);
-            equi.x = Math.round(equi.x);
-            equi.y = Math.round(equi.y);
-            pixMap[index++] = equi;
+            var srcInd = (equi.y * param.srcWidth + equi.x) * 4;
+            dstData.data[ind + 0] = srcData.data[srcInd + 0];
+            dstData.data[ind + 1] = srcData.data[srcInd + 1];
+            dstData.data[ind + 2] = srcData.data[srcInd + 2];
+            dstData.data[ind + 3] = srcData.data[srcInd + 3];
         }
-    }
 
-    var size = 4 * dstWidth * dstHeight;
-    var dstData = event.data.dstData;
-    var srcData = event.data.srcData;
-    length = size / 100;
-    adder = length;
-    for (var ind = 0, index = 0; ind < size; ind += 4, ++index) {
-        if (ind >= length) {
-            length += adder;
-            self.postMessage({ counter: ++counter });
+        self.postMessage({ direction: "forward", finished: true, dstData: dstData });
+    } else if (event.data.direction == "backward") {
+        var mixedData = event.data.mixedData;
+        var resultData = event.data.resultData;
+
+        var index = 0;
+        for (var row = 0; row < mixedData.height; ++row) {
+            for (var col = 0; col < mixedData.width; ++col) {
+                if (row >= length) {
+                    length += adder;
+                    self.postMessage({ counter: ++counter });
+                }
+
+                var equi = pinholeToEqui(col, row);
+                equi.x = Math.round(equi.x);
+                equi.y = Math.round(equi.y);
+                // console.log(equi);
+
+                var ind_mixed = (row * mixedData.width + col) * 4;
+                var ind_orig = (equi.y * resultData.width + equi.x) * 4;
+                resultData.data[ind_orig + 0] = mixedData.data[ind_mixed + 0];
+                resultData.data[ind_orig + 1] = mixedData.data[ind_mixed + 1];
+                resultData.data[ind_orig + 2] = mixedData.data[ind_mixed + 2];
+                resultData.data[ind_orig + 3] = mixedData.data[ind_mixed + 3];
+            }
         }
-        equi = pixMap[index];
 
-        var srcInd = equi.y * srcWidth + equi.x;
-        dstData.data[ind + 0] = srcData.data[srcInd*4 + 0];
-        dstData.data[ind + 1] = srcData.data[srcInd*4 + 1];
-        dstData.data[ind + 2] = srcData.data[srcInd*4 + 2];
-        dstData.data[ind + 3] = 255;
+        self.postMessage({ direction: "backward", finished: true, resultData: resultData });
     }
-
-    self.postMessage({ finished: true, dstData: dstData });
 });
 
 function pinholeToEqui(x, y) {
     var normalized = normalizeIntrinsic(x, y);
     // console.log('normalized');
     // console.log(normalized);
-    var rotated = multiplyRotation(normalized.x, normalized.y, gYaw, gPitch, gRoll);
+    var rotated = multiplyRotation(normalized.x, normalized.y);
     // console.log('rotated');
     // console.log(rotated);
     var latlon = normToLatlon(rotated.x, rotated.y, rotated.z);
@@ -81,19 +125,6 @@ function pinholeToEqui(x, y) {
     // console.log(equiXY);
     return equiXY;
 }
-
-var f = (dstWidth / 2.0) / Math.tan(toRadian(hfov) / 2.0);
-var cx = dstWidth / 2;
-var cy = dstHeight / 2;
-var fx = f;
-var fy = f;
-var skew = 0;
-
-var a11 = (1.0 / fx);
-var a12 = (-skew / (fx * fy));
-var a13 = ((skew * cy - cx * fy) / (fx * fy));
-var a22 = (1.0 / fy);
-var a23 = (-cy / fy);
 
 function normalizeIntrinsic(x, y) {
     return {
@@ -119,14 +150,14 @@ Rx * Rz * Ry * (PI/2):
 (bc)*x + (bdf+ae)*y + (bde-af)*1
 */
 // default yaw=0, pitch=0, roll=0
-function multiplyRotation(x, y, yaw, pitch, roll) {
+function multiplyRotation(x, y) {
     // Rx(roll) * Rz(yaw) * Ry(pitch)
-    var a = Math.cos(roll),
-        b = Math.sin(roll);
-    var e = Math.cos(pitch),
-        f = Math.sin(pitch);
-    var c = Math.cos(yaw),
-        d = Math.sin(yaw);
+    var a = Math.cos(param.gRoll),
+        b = Math.sin(param.gRoll);
+    var e = Math.cos(param.gPitch),
+        f = Math.sin(param.gPitch);
+    var c = Math.cos(param.gYaw),
+        d = Math.sin(param.gYaw);
 
     // var X = (c * e) * x - (d) * y + (c * f) * 1;
     // var Y = (a * d * e + b * f) * x + (a * c) * y + (a * d * f - b * e) * 1;
@@ -151,13 +182,27 @@ function normToLatlon(x, y, z) {
 }
 
 function latlonToEqui(lat, lon) {
-    var x = wrapZeroToOne(lon / (Math.PI * 2) + 0.5) * srcWidth;
-    var y = reflectZeroToOne(lat / Math.PI + 0.5) * (srcHeight - 1);
-    y = srcHeight - y - 1;
+    var x = wrapZeroToOne(lon / (Math.PI * 2) + 0.5) * param.srcWidth;
+    var y = reflectZeroToOne(lat / Math.PI + 0.5) * (param.srcHeight - 1);
+    y = param.srcHeight - y - 1;
     return {
         x: x,
         y: y
     }
+}
+
+function calculateIntrinsic(pinholeWidth, pinholeHeight, hfov, skew) {
+    f = (pinholeWidth / 2.0) / Math.tan(toRadian(hfov) / 2.0);
+    cx = pinholeWidth / 2;
+    cy = pinholeHeight / 2;
+    fx = f;
+    fy = f;
+    skew = 0;
+    a11 = (1.0 / fx);
+    a12 = (-skew / (fx * fy));
+    a13 = ((skew * cy - cx * fy) / (fx * fy));
+    a22 = (1.0 / fy);
+    a23 = (-cy / fy);
 }
 
 function toRadian(val) {

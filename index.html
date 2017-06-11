@@ -14,138 +14,28 @@
         height: 30px;
         background-color: green;
     }
-    
     #main {
         display: inline-block
+        width: 100%;
     }
     </style>
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha256-k2WSCIexGzOj3Euiig+TlR8gA0EmPjuc79OEeY5L45g=" crossorigin="anonymous"></script>
 </head>
 
 <body onload="loaded()">
-    <div id="main" onmousemove="mymousemove(event)" onclick="mymouseclick(event)">
+    <div id="main" onclick="mymouseclick(event)">
         <div id="myProgress">
             <div id="myBar"></div>
         </div>
-        <canvas id="src"></canvas>
+        <canvas id="canvas-360"></canvas>
     </div>
-    <canvas id="dst"></canvas>
+    <canvas id="base-canvas"></canvas>
+    <canvas id="result-canvas"></canvas>
+    <canvas id="result-resized-canvas"></canvas>
+    <div id="hidden_canvas">
+        <canvas style="display:none;" id="original-360"></canvas>
+    </div>
 </body>
-<script type="text/javascript">
-var img = new Image;
-var srcCanvas = document.getElementById("src");
-var dstCanvas = document.getElementById("dst");
-var sctx = srcCanvas.getContext("2d");
-var dctx = dstCanvas.getContext("2d");
-var src = "360-2.jpg";
-var ratio = 1;
-var correctedObj;
-
-var barEl = document.getElementById("myBar");
-
-
-// Camera parameters
-var srcWidth = 1024;
-var srcHeight = 512;
-var dstWidth = 400;
-var dstHeight = 300;
-var hfov = 80; //  in degrees
-var gYaw = 0,
-    gPitch = 0,
-    gRoll = 0;
-
-function loaded() {
-
-    img.crossOrigin = "Anonymous";
-
-    img.onload = function() {
-        ratio = 1; //1024 / img.width;
-        srcCanvas.width = img.width * ratio;
-        srcCanvas.height = img.height * ratio;
-
-        dstCanvas.width = dstWidth;
-        dstCanvas.height = dstHeight;
-
-        update();
-    }
-    img.src = src;
-}
-
-function update() {
-    // draw 360 image
-    sctx.drawImage(img, 0, 0, img.width * ratio, img.height * ratio);
-
-    var imageData = dctx.createImageData(dstWidth, dstHeight);
-    console.log(imageData);
-
-    console.log('start');
-
-    var counter = new Worker("equiprocess.js");
-
-    counter.addEventListener("message", function(event) {
-        if (event.data.finished) {
-            console.log(event.data.dstData);
-            dctx.putImageData(event.data.dstData, 0, 0);
-            console.log('finished');
-        } else {
-            move();
-            console.log('merong:' + event.data.counter);
-        }
-    });
-    // window.srcData = sctx.getImageData(0,0,srcWidth, srcHeight);
-
-    // Camera parameters
-    counter.postMessage({
-        srcData: sctx.getImageData(0, 0, srcWidth, srcHeight),
-        dstData: imageData,
-        srcWidth: srcWidth,
-        srcHeight: srcHeight,
-        dstWidth: dstWidth,
-        dstHeight: dstHeight,
-        hfov: hfov, //  in degrees
-        gYaw: gYaw,
-        gPitch: gPitch,
-        gRoll: gRoll
-    });
-}
-
-function mymousemove(event) {
-    // var a = equiToLatlon(event.clientX, event.clientY);
-    // console.log(a);
-}
-
-function mymouseclick(event) {
-    var a = equiToLatlon(event.clientX, event.clientY);
-    setDirection(a.lon, a.lat, 0);
-    move(1);
-    update();
-}
-
-function equiToLatlon(x, y) {
-    var lon = (x / srcWidth - 0.5) * Math.PI * 2;
-    var lat = ((srcHeight - y - 1.0) / (srcHeight - 1) - 0.5) * Math.PI;
-    return {
-        lon: lon,
-        lat: lat
-    }
-}
-
-function setDirection(yaw, pitch, roll) {
-    gYaw = yaw;
-    gPitch = pitch;
-    gRoll = roll;
-}
-
-var width = 1;
-
-function move(val) {
-    if (val) {
-        width = val;
-        barEl.style.width = width / 2 + '%';
-    } else {
-        width++;
-        barEl.style.width = width / 2 + '%';
-    }
-}
-</script>
+<script type="text/javascript" src="app.js"></script>
 
 </html>
