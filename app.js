@@ -55,8 +55,8 @@ window.onload = function() {
         orig_canvas.width = orig_img.width;
         orig_canvas.height = orig_img.height;
 
-        // drawImageAntialiasing(orig_img, orig_img.width, orig_img.height, orig_ctx);
         drawImageAntialiasing(orig_img, orig_img.width, orig_img.height, orig_ctx);
+        // orig_ctx.drawImage(orig_img, 0, 0, orig_img.width, orig_img.height);
 
         // draw resized image
         // drawImageAntialiasing(orig_img, orig_img.width * ratio, orig_img.height * ratio, resized_ctx);
@@ -73,6 +73,7 @@ window.onload = function() {
 };
 
 function updateBase() {
+    console.log('updateBase');
     var params = {
         direction: "forward",
         srcData: orig_ctx.getImageData(0, 0, orig_canvas.width, orig_canvas.height),
@@ -90,6 +91,7 @@ function updateBase() {
 }
 
 function update360() {
+    console.log('update360');
     worker.postMessage({
         direction: "backward",
         mixedData: base_ctx.getImageData(0, 0, base_canvas.width, base_canvas.height),
@@ -260,12 +262,28 @@ function prevStep() {
 }
 
 function mymouseclick(event) {
-    var a = equiToLatlon(event.layerX / ratio, event.layerY / ratio, orig_img.width, orig_img.height);
+    updateByPostion(event.layerX, event.layerY);
+}
+
+function updateByPostion(x, y) {
+    var a = equiToLatlon(x / ratio, y / ratio, orig_img.width, orig_img.height);
     setDirection(a.lon, a.lat, 0);
+    
     move(1);
-
     clearCanvas();
+    updateFrame();
+}
 
+window.updateByParameter = function(fov, width, height) {
+    hfov = Number(fov);
+    dstWidth = Number(width);
+    dstHeight = Number(height);
+
+    base_canvas.width = dstWidth;
+    base_canvas.height = dstHeight;
+
+    move(1);
+    clearCanvas();
     updateFrame();
 }
 

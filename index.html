@@ -15,6 +15,38 @@
         height: 30px;
         background-color: green;
     }
+    
+    .container form {
+        display: table;
+    }
+    
+    .container p {
+        display: table-row;
+    }
+    
+    .container label {
+        display: table-cell;
+    }
+    
+    .container input {
+        display: table-cell;
+    }
+    
+    input[type="range"] {
+        position: relative;
+    }
+    
+    input[type="range"]:before {
+        position: absolute;
+        top: -17px;
+        left: 50%;
+        margin-left: -10px;
+        content: attr(value);
+        display: block;
+        text-align: center;
+        width: 20px;
+        height: 10px;
+    }
     </style>
 </head>
 
@@ -33,6 +65,22 @@
             <div id="step1">
                 <h2>Step1.</h2>
                 <p>Original Image - Select region to extract.</p>
+                <div class="container">
+                    <form>
+                        <p>
+                            <label>FOV</label>
+                            <input id="fovController" type="range" value="80" min=45 max=120 name="input-fov">
+                        </p>
+                        <p>
+                            <label>Width</label>
+                            <input type="text" value="600" name="input-width">
+                        </p>
+                        <p>
+                            <label>Height</label>
+                            <input type="text" value="500" name="input-height">
+                        </p>
+                    </form>
+                </div>
                 <canvas id="canvas-360" onclick="mymouseclick(event)"></canvas>
                 <p><a id="dl-orig" download="canvas_original.png" href="#">Download</a></p>
             </div>
@@ -56,5 +104,16 @@
     </div>
 </body>
 <script type="text/javascript" src="app.js"></script>
+<script type="text/javascript">
+document.querySelector('input[type=range]').addEventListener('input', function rangeChange() {
+    this.setAttribute('value', this.value);
+});
+
+$("input").change(function() {
+    var params = [$('input[name=input-fov]')[0].value, $('input[name=input-width]')[0].value, $('input[name=input-height]')[0].value];
+    console.log(params);
+    updateByParameter(params[0], params[1], params[2]);
+});
+</script>
 
 </html>
