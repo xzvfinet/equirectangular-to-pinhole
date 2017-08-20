@@ -86,8 +86,6 @@ self.addEventListener("message", function(event) {
     } else if (param.direction == "backward") {
         var mixedData = param.mixedData;
         var resultData = param.resultData;
-        console.log(mixedData);
-        console.log(resultData);
 
         var index = 0;
         for (var row = 0; row < mixedData.height; ++row) {
@@ -100,7 +98,6 @@ self.addEventListener("message", function(event) {
                 var equi = pinholeToEqui(col, row);
                 equi.x = Math.round(equi.x);
                 equi.y = Math.round(equi.y);
-                // console.log(equi);
 
                 var ind_mixed = (row * mixedData.width + col) * 4;
                 var ind_orig = (equi.y * resultData.width + equi.x) * 4;
@@ -127,14 +124,21 @@ self.addEventListener("message", function(event) {
 });
 
 function pinholeToEqui(x, y) {
-    var normalized = normalizeIntrinsic(x, y);
+    var normalized = normalizeCameraParameters(x, y);
     var rotated = multiplyRotation(normalized.x, normalized.y);
     var latlon = normToLatlon(rotated.x, rotated.y, rotated.z);
     var equiXY = latlonToEqui(latlon.lat, latlon.lon);
     return equiXY;
 }
 
-function normalizeIntrinsic(x, y) {
+function equiToPinhole(x, y) {
+
+}
+
+// Commonly there are two parameters, intrinsic and extrinsic
+// But in this situation we suppose that extrinsic is an identity matrix
+// because the 
+function normalizeCameraParameters(x, y) {
     return {
         x: a11 * x + a12 * y + a13,
         y: a22 * y + a23
@@ -148,14 +152,15 @@ Rx:     Ry:     Rz:
 0 b a   -f 0 e  0 0 1
 
 Rx * Rz * Ry:
-ce      -d cf
-ade+bf  ac adf-be
-bde-af  bc bdf+ae
+ce      -d cf       |0 0 1|   -d  cf       ce
+ade+bf  ac adf-be   |1 0 0|   ac  adf-be   ade+bf
+bde-af  bc bdf+ae   |0 1 0|   bc  bdf+ae   bde-af
 
-Rx * Rz * Ry * (PI/2):
-(-d)*x + (cf    )*y + (ce)*1
-(ac)*x + (adf-be)*y + (ade+bf)*1
-(bc)*x + (bdf+ae)*y + (bde-af)*1
+(X,Y,Z) = (Rx * Rz * Ry)(PI/2)(x,y,z):
+
+X = (-d)*x + (cf    )*y + (ce    )*1
+Y = (ac)*x + (adf-be)*y + (ade+bf)*1
+Z = (bc)*x + (bdf+ae)*y + (bde-af)*1
 */
 // default yaw=0, pitch=0, roll=0
 function multiplyRotation(x, y) {

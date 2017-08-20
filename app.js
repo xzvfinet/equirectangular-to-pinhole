@@ -25,7 +25,8 @@ result_ctx = result_canvas.getContext("2d");
 result_resized_canvas = document.getElementById("result-resized-canvas");
 result_resized_ctx = result_resized_canvas.getContext("2d");
 
-var segmentNum = 36;
+var segmentNum = -1;
+// var segmentNum = 36;
 var corners = [];
 var unitPoint = {};
 
@@ -73,7 +74,6 @@ window.onload = function() {
 };
 
 function updateBase() {
-    console.log('updateBase');
     var params = {
         direction: "forward",
         srcData: orig_ctx.getImageData(0, 0, orig_canvas.width, orig_canvas.height),
@@ -91,7 +91,6 @@ function updateBase() {
 }
 
 function update360() {
-    console.log('update360');
     worker.postMessage({
         direction: "backward",
         mixedData: base_ctx.getImageData(0, 0, base_canvas.width, base_canvas.height),
@@ -140,7 +139,6 @@ function onmessage(event) {
 
                 break;
             case "backward":
-                console.log('backward');
                 // back to equirectangular
                 result_resized_canvas.width = resized_canvas.width;
                 result_resized_canvas.height = resized_canvas.height;
@@ -182,9 +180,17 @@ function onmessage(event) {
 function getLinePoints(x0, y0, x1, y1, segments) {
     var linePoints = [];
 
-    var dx = (x1 - x0) / segments;
-    var dy = (y1 - y0) / segments;
-    for (var i = 0; i < segments; ++i) {
+    var d = 1;
+    if (segments == -1) {
+        d = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+    } else {
+        d = segments;
+    }
+
+    var dx = (x1 - x0) / d;
+    var dy = (y1 - y0) / d;
+
+    for (var i = 0; i < d; ++i) {
         var x = x0 + dx * i;
         var y = y0 + dy * i;
 
@@ -299,7 +305,6 @@ function downloadCanvas() {
     else if (this.id == "dl-result") canvas = result_resized_canvas;
     else return;
 
-    console.log(canvas);
     var dt = canvas.toDataURL('image/png');
     /* Change MIME type to trick the browser to downlaod the file instead of displaying it */
     dt = dt.replace(/^data:image\/[^;]*/, 'data:application/octet-stream');
