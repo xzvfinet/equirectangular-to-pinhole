@@ -2,7 +2,7 @@ var currentStep = 0;
 var MAX_STEP_NUM = 3;
 
 var worker = null;
-var image_set = { base: "https://raw.githubusercontent.com/xzvfinet/equirectangular-to-pinhole/master/360.png" };
+var image_set = { base: "360.png" };
 
 // Div
 var steps = [
