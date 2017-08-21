@@ -2,7 +2,7 @@ var currentStep = 0;
 var MAX_STEP_NUM = 3;
 
 var worker = null;
-var image_set = { base: "360.png" };
+var image_set = { base: "https://raw.githubusercontent.com/xzvfinet/equirectangular-to-pinhole/master/360.png" };
 
 // Div
 var steps = [
@@ -29,8 +29,6 @@ var segmentNum = -1;
 // var segmentNum = 36;
 var corners = [];
 var unitPoint = {};
-
-
 var ratio = 1;
 
 // Camera parameters
@@ -41,15 +39,18 @@ var gYaw = 0,
     gPitch = 0,
     gRoll = 0;
 
+// Width of view canvas
+var viewWidth = 1024;
+
 window.onload = function() {
     steps[1].hidden = true;
     steps[2].hidden = true;
 
     orig_img = new Image;
     orig_img.onload = function() {
-        ratio = 1024 / orig_img.width;
+        ratio = viewWidth / orig_img.width;
 
-        resized_canvas.width = 1024;
+        resized_canvas.width = viewWidth;
         resized_canvas.height = orig_img.height * ratio;
 
         // draw original image (not show)
@@ -64,7 +65,9 @@ window.onload = function() {
         resized_ctx.drawImage(orig_canvas, 0, 0, orig_img.width * ratio, orig_img.height * ratio);
 
     }
-    orig_img.src = image_set.base;
+    orig_img.load(image_set.base);
+    resized_canvas.width = viewWidth;
+    resized_canvas.height = viewWidth/2;
 
     base_canvas.width = dstWidth;
     base_canvas.height = dstHeight;
@@ -274,7 +277,7 @@ function mymouseclick(event) {
 function updateByPostion(x, y) {
     var a = equiToLatlon(x / ratio, y / ratio, orig_img.width, orig_img.height);
     setDirection(a.lon, a.lat, 0);
-    
+
     move(1);
     clearCanvas();
     updateFrame();
@@ -317,3 +320,23 @@ function downloadCanvas() {
 document.getElementById("dl-orig").addEventListener('click', downloadCanvas, false);
 document.getElementById("dl-base").addEventListener('click', downloadCanvas, false);
 document.getElementById("dl-result").addEventListener('click', downloadCanvas, false);
+
+Image.prototype.load = function(url) {
+    var thisImg = this;
+    var xmlHTTP = new XMLHttpRequest();
+    xmlHTTP.open('GET', url, true);
+    xmlHTTP.responseType = 'arraybuffer';
+    xmlHTTP.onload = function(e) {
+        var blob = new Blob([this.response]);
+        thisImg.src = window.URL.createObjectURL(blob);
+    };
+    xmlHTTP.onprogress = function(e) {
+        thisImg.completedPercentage = parseInt((e.loaded / e.total) * 100);
+        $("#load-progress").attr("value", thisImg.completedPercentage);
+    };
+    xmlHTTP.onloadstart = function() {
+        thisImg.completedPercentage = 0;
+    };
+    xmlHTTP.send();
+};
+Image.prototype.completedPercentage = 0;

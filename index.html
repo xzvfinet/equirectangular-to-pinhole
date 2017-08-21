@@ -81,7 +81,14 @@
                         </p>
                     </form>
                 </div>
-                <canvas id="canvas-360" onclick="mymouseclick(event)"></canvas>
+                <div style="position: relative; display: inline-block;">    
+                    <div style="position: relative; z-index: 2;">
+                        <canvas id="canvas-360" onclick="mymouseclick(event)"></canvas>
+                    </div>
+                    <div style="position:absolute; top:256px; left:512px; z-index: 1;">
+                        <progress id="load-progress" value="0" max="100"></progress>
+                    </div>
+                </div>
                 <p><a id="dl-orig" download="canvas_original.png" href="#">Download</a></p>
             </div>
             <div id="step2">
