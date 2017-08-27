@@ -42,7 +42,7 @@ function forwardProjection(param) {
         return;
     }
 
-    // for work progress counting
+    // for work progress bar
     var counter = 0;
     var length = param.dstHeight / 100;
     var adder = length;
@@ -54,52 +54,22 @@ function forwardProjection(param) {
     var pixMap = [];
     var index = 0;
 
-    var minVal = { x: Number.MAX_SAFE_INTEGER, y: Number.MAX_SAFE_INTEGER },
-        maxVal = { x: 0, y: 0 };
-
-    // create look up table(LUT) pixMap
     for (var row = 0; row < param.dstHeight; ++row) {
         for (var col = 0; col < param.dstWidth; ++col) {
-            if (row >= length) {
-                length += adder;
-                self.postMessage({ counter: ++counter });
-            }
-
             var equi = pinholeToEqui(col, row);
-            if (param.interpolation == 'billinear') {
-            } else {
-                equi.x = Math.round(equi.x);
-                equi.y = Math.round(equi.y);
-                pixMap[index++] = equi;
-            }
 
-            // min max for original bounding box
-            if (equi.x < minVal.x) minVal.x = equi.x;
-            else if (equi.x > maxVal.x) maxVal.x = equi.x
-            if (equi.y < minVal.y) minVal.y = equi.y;
-            else if (equi.y > maxVal.y) maxVal.y = equi.y
+            var srcPixel = getSrcPixelInterpolation(param, equi.x, equi.y);
+            var dstInd = (row * param.dstWidth + col) * 4;
+
+            dstData.data[dstInd + 0] = srcPixel[0];
+            dstData.data[dstInd + 1] = srcPixel[1];
+            dstData.data[dstInd + 2] = srcPixel[2];
+            dstData.data[dstInd + 3] = srcPixel[3];
         }
-    }
 
-    var originalSize = {
-        x: maxVal.x - minVal.x,
-        y: maxVal.y - minVal.y
-    };
-
-    length = size / 100;
-    adder = length;
-    for (var ind = 0, index = 0; ind < size; ind += 4, ++index) {
-        if (ind >= length) {
-            length += adder;
-            self.postMessage({ counter: ++counter });
-        }
-        equi = pixMap[index];
-
-        var srcInd = (equi.y * param.srcWidth + equi.x) * 4;
-        dstData.data[ind + 0] = srcData.data[srcInd + 0];
-        dstData.data[ind + 1] = srcData.data[srcInd + 1];
-        dstData.data[ind + 2] = srcData.data[srcInd + 2];
-        dstData.data[ind + 3] = srcData.data[srcInd + 3];
+        // add up progress
+        length += adder;
+        self.postMessage({ counter: ++counter });
     }
 
     return dstData;
@@ -147,6 +117,25 @@ function pinholeToEqui(x, y) {
 }
 
 function equiToPinhole(x, y) {
+
+}
+
+function getSrcPixelInterpolation(param, x, y) {
+    var data = param.srcData.data;
+    if (param.interpolation == 'bilinear') {
+
+    } else {
+        x = Math.round(x);
+        y = Math.round(y);
+        var srcInd = (y * param.srcWidth + x) * 4;
+
+        return [
+            data[srcInd + 0],
+            data[srcInd + 1],
+            data[srcInd + 2],
+            data[srcInd + 3]
+        ];
+    }
 
 }
 
@@ -217,6 +206,16 @@ function latlonToEqui(lat, lon) {
         x: x,
         y: y
     }
+}
+
+function equiToLatlon(x, y) {
+    // var lat =
+    //     var lon =
+
+    //         return {
+    //             lat: lat,
+    //             lon: lon
+    //         }
 }
 
 function calculateIntrinsic(pinholeWidth, pinholeHeight, hfov, skew) {
