@@ -79,6 +79,7 @@ window.onload = function() {
 function updateBase() {
     var params = {
         direction: "forward",
+        interpolation: "",
         srcData: orig_ctx.getImageData(0, 0, orig_canvas.width, orig_canvas.height),
         dstData: base_ctx.createImageData(base_canvas.width, base_canvas.height),
         srcWidth: orig_img.width,
@@ -96,6 +97,7 @@ function updateBase() {
 function update360() {
     worker.postMessage({
         direction: "backward",
+        interpolation: "",
         mixedData: base_ctx.getImageData(0, 0, base_canvas.width, base_canvas.height),
         resultData: result_ctx.getImageData(0, 0, resized_canvas.width, resized_canvas.height),
         srcWidth: resized_canvas.width,
@@ -138,7 +140,7 @@ function onmessage(event) {
     if (event.data.finished) {
         switch (event.data.direction) {
             case "forward":
-                base_ctx.putImageData(result.dstData, 0, 0);
+                base_ctx.putImageData(result.data, 0, 0);
 
                 break;
             case "backward":
@@ -146,7 +148,7 @@ function onmessage(event) {
                 result_resized_canvas.width = resized_canvas.width;
                 result_resized_canvas.height = resized_canvas.height;
 
-                result_resized_ctx.putImageData(result.resultData, 0, 0);
+                result_resized_ctx.putImageData(result.data, 0, 0);
 
                 break;
             case "unit":

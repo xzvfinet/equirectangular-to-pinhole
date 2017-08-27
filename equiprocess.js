@@ -1,6 +1,5 @@
 // Camera parameters
 var param = {};
-
 var f;
 var cx;
 var cy;
@@ -14,102 +13,14 @@ var a22;
 var a23;
 
 self.addEventListener("message", function(event) {
-    var counter = 0;
 
     param = event.data;
 
     calculateIntrinsic(param.dstWidth, param.dstHeight, param.hfov, 0);
 
-    var length = param.dstHeight / 100;
-    var adder = length;
-
     var result = {};
 
-    if (param.direction == "forward") {
-        if (!param || !param.srcData) {
-            console.log('no data for worker');
-            return;
-        }
-
-        var pixMap = [];
-        var index = 0;
-
-        var minVal = { x: Number.MAX_SAFE_INTEGER, y: Number.MAX_SAFE_INTEGER },
-            maxVal = { x: 0, y: 0 };
-
-        for (var row = 0; row < param.dstHeight; ++row) {
-            for (var col = 0; col < param.dstWidth; ++col) {
-                if (row >= length) {
-                    length += adder;
-                    self.postMessage({ counter: ++counter });
-                }
-
-                var equi = pinholeToEqui(col, row);
-                equi.x = Math.round(equi.x);
-                equi.y = Math.round(equi.y);
-                pixMap[index++] = equi;
-
-                // min max for original bounding box
-                if (equi.x < minVal.x) minVal.x = equi.x;
-                else if (equi.x > maxVal.x) maxVal.x = equi.x
-                if (equi.y < minVal.y) minVal.y = equi.y;
-                else if (equi.y > maxVal.y) maxVal.y = equi.y
-            }
-        }
-
-        var originalSize = {
-            x: maxVal.x - minVal.x,
-            y: maxVal.y - minVal.y
-        };
-
-        var size = 4 * param.dstWidth * param.dstHeight;
-        var dstData = param.dstData;
-        var srcData = param.srcData;
-        length = size / 100;
-        adder = length;
-        for (var ind = 0, index = 0; ind < size; ind += 4, ++index) {
-            if (ind >= length) {
-                length += adder;
-                self.postMessage({ counter: ++counter });
-            }
-            equi = pixMap[index];
-
-            var srcInd = (equi.y * param.srcWidth + equi.x) * 4;
-            dstData.data[ind + 0] = srcData.data[srcInd + 0];
-            dstData.data[ind + 1] = srcData.data[srcInd + 1];
-            dstData.data[ind + 2] = srcData.data[srcInd + 2];
-            dstData.data[ind + 3] = srcData.data[srcInd + 3];
-        }
-
-        result.dstData = dstData;
-
-    } else if (param.direction == "backward") {
-        var mixedData = param.mixedData;
-        var resultData = param.resultData;
-
-        var index = 0;
-        for (var row = 0; row < mixedData.height; ++row) {
-            for (var col = 0; col < mixedData.width; ++col) {
-                if (row >= length) {
-                    length += adder;
-                    self.postMessage({ counter: ++counter });
-                }
-
-                var equi = pinholeToEqui(col, row);
-                equi.x = Math.round(equi.x);
-                equi.y = Math.round(equi.y);
-
-                var ind_mixed = (row * mixedData.width + col) * 4;
-                var ind_orig = (equi.y * resultData.width + equi.x) * 4;
-                resultData.data[ind_orig + 0] = mixedData.data[ind_mixed + 0];
-                resultData.data[ind_orig + 1] = mixedData.data[ind_mixed + 1];
-                resultData.data[ind_orig + 2] = mixedData.data[ind_mixed + 2];
-                resultData.data[ind_orig + 3] = mixedData.data[ind_mixed + 3];
-            }
-        }
-
-        result.resultData = resultData;
-    } else if (param.direction == "unit") {
+    if (param.direction == "unit") {
         var points = param.points;
         var equiPoints = [];
 
@@ -118,10 +29,114 @@ self.addEventListener("message", function(event) {
         }
 
         result.equiPoints = equiPoints;
+    } else {
+        result.data = eval(param.direction + 'Projection')(param);
     }
 
     self.postMessage({ direction: param.direction, finished: true, result: result });
 });
+
+function forwardProjection(param) {
+    if (!param || !param.srcData) {
+        console.log('no data for worker');
+        return;
+    }
+
+    // for work progress counting
+    var counter = 0;
+    var length = param.dstHeight / 100;
+    var adder = length;
+
+    var size = 4 * param.dstWidth * param.dstHeight;
+    var dstData = param.dstData;
+    var srcData = param.srcData;
+
+    var pixMap = [];
+    var index = 0;
+
+    var minVal = { x: Number.MAX_SAFE_INTEGER, y: Number.MAX_SAFE_INTEGER },
+        maxVal = { x: 0, y: 0 };
+
+    // create look up table(LUT) pixMap
+    for (var row = 0; row < param.dstHeight; ++row) {
+        for (var col = 0; col < param.dstWidth; ++col) {
+            if (row >= length) {
+                length += adder;
+                self.postMessage({ counter: ++counter });
+            }
+
+            var equi = pinholeToEqui(col, row);
+            if (param.interpolation == 'billinear') {
+            } else {
+                equi.x = Math.round(equi.x);
+                equi.y = Math.round(equi.y);
+                pixMap[index++] = equi;
+            }
+
+            // min max for original bounding box
+            if (equi.x < minVal.x) minVal.x = equi.x;
+            else if (equi.x > maxVal.x) maxVal.x = equi.x
+            if (equi.y < minVal.y) minVal.y = equi.y;
+            else if (equi.y > maxVal.y) maxVal.y = equi.y
+        }
+    }
+
+    var originalSize = {
+        x: maxVal.x - minVal.x,
+        y: maxVal.y - minVal.y
+    };
+
+    length = size / 100;
+    adder = length;
+    for (var ind = 0, index = 0; ind < size; ind += 4, ++index) {
+        if (ind >= length) {
+            length += adder;
+            self.postMessage({ counter: ++counter });
+        }
+        equi = pixMap[index];
+
+        var srcInd = (equi.y * param.srcWidth + equi.x) * 4;
+        dstData.data[ind + 0] = srcData.data[srcInd + 0];
+        dstData.data[ind + 1] = srcData.data[srcInd + 1];
+        dstData.data[ind + 2] = srcData.data[srcInd + 2];
+        dstData.data[ind + 3] = srcData.data[srcInd + 3];
+    }
+
+    return dstData;
+}
+
+function backwardProjection(param) {
+    // for work progress counting
+    var counter = 0;
+    var length = param.dstHeight / 100;
+    var adder = length;
+
+    var mixedData = param.mixedData;
+    var resultData = param.resultData;
+
+    var index = 0;
+    for (var row = 0; row < mixedData.height; ++row) {
+        for (var col = 0; col < mixedData.width; ++col) {
+            if (row >= length) {
+                length += adder;
+                self.postMessage({ counter: ++counter });
+            }
+
+            var equi = pinholeToEqui(col, row);
+            equi.x = Math.round(equi.x);
+            equi.y = Math.round(equi.y);
+
+            var ind_mixed = (row * mixedData.width + col) * 4;
+            var ind_orig = (equi.y * resultData.width + equi.x) * 4;
+            resultData.data[ind_orig + 0] = mixedData.data[ind_mixed + 0];
+            resultData.data[ind_orig + 1] = mixedData.data[ind_mixed + 1];
+            resultData.data[ind_orig + 2] = mixedData.data[ind_mixed + 2];
+            resultData.data[ind_orig + 3] = mixedData.data[ind_mixed + 3];
+        }
+    }
+
+    return resultData;
+}
 
 function pinholeToEqui(x, y) {
     var normalized = normalizeCameraParameters(x, y);
