@@ -1,16 +1,7 @@
-// Camera parameters
+// Parameters
 var param = {};
-var f;
-var cx;
-var cy;
-var fx;
-var fy;
-var skew;
-var a11;
-var a12;
-var a13;
-var a22;
-var a23;
+// Desired rotation
+var cosRoll, sinRoll, cosPitch, sinPitch, cosYaw, sinYaw;
 
 self.addEventListener("message", function(event) {
 
@@ -108,18 +99,6 @@ function backwardProjection(param) {
     return resultData;
 }
 
-function pinholeToEqui(x, y) {
-    var normalized = normalizeCameraParameters(x, y);
-    var rotated = multiplyRotation(normalized.x, normalized.y);
-    var latlon = normToLatlon(rotated.x, rotated.y, rotated.z);
-    var equiXY = latlonToEqui(latlon.lat, latlon.lon);
-    return equiXY;
-}
-
-function equiToPinhole(x, y) {
-
-}
-
 function getSrcPixelInterpolation(param, x, y) {
     var data = param.srcData.data;
     if (param.interpolation == 'bilinear') {
@@ -139,9 +118,46 @@ function getSrcPixelInterpolation(param, x, y) {
 
 }
 
+function pinholeToSphere(x, y) {
+    var normalized = normalizeCameraParameters(x, y);
+    var rotated = multiplyRotation(normalized.x, normalized.y);
+
+    return {x:rotated.x, y:rotated.y, z:rotated.z};
+}
+
+function sphereToPinhole(x, y, z) {
+    var normalized = divideRotation(x, y, z);
+    var pinhole = applyCameraParameters(normalized.x, normalized.y);
+
+    return {x:pinhole.x, y:pinhole.y};
+}
+
+function equiToSphere(x, y) {
+
+}
+
+function sphereToEqui(x, y, z) {
+    var latlon = normToLatlon(x, y, z);
+    var equiXY = latlonToEqui(latlon.lat, latlon.lon);
+    return equiXY;
+}
+
+function pinholeToEqui(x, y) {
+    var spherePoint = pinholeToSphere(x, y);
+    var equiPoint = sphereToEqui(spherePoint.x, spherePoint.y, spherePoint.z);
+    return equiPoint;
+}
+
+function equiToPinhole(x, y) {
+    // equi to lat lon
+    var spherePoint = equiToSphere(x, y);
+    var pinholePoint = sphereToPinhole(spherePoint.x, spherePoint.y, spherePoint.z);
+    return pinholePoint;
+}
+
 // Commonly there are two parameters, intrinsic and extrinsic
 // But in this situation we suppose that extrinsic is an identity matrix
-// because the 
+var a11,a12,a13,a22,a23;
 function normalizeCameraParameters(x, y) {
     return {
         x: a11 * x + a12 * y + a13,
@@ -156,11 +172,21 @@ Rx:     Ry:     Rz:
 0 b a   -f 0 e  0 0 1
 
 Rx * Rz * Ry:
-ce      -d cf       |0 0 1|   -d  cf       ce
-ade+bf  ac adf-be   |1 0 0|   ac  adf-be   ade+bf
-bde-af  bc bdf+ae   |0 1 0|   bc  bdf+ae   bde-af
+|ce      -d cf    |
+|ade+bf  ac adf-be|
+|bde-af  bc bdf+ae|
 
-(X,Y,Z) = (Rx * Rz * Ry)(PI/2)(x,y,z):
+Rx(PI/2) * Ry(PI/2):
+|1 0  0|   | 0 0 1|   |0 0 1|
+|0 0 -1| X | 0 1 0| = |1 0 0|
+|0 1  0|   |-1 0 0|   |0 1 0|
+
+Rx * Rz * Ry * Rx(PI/2) * Ry(PI/2):
+|ce      -d cf    |   |0 0 1|   |-d  cf       ce    |
+|ade+bf  ac adf-be| X |1 0 0| = |ac  adf-be   ade+bf|
+|bde-af  bc bdf+ae|   |0 1 0|   |bc  bdf+ae   bde-af|
+
+(X,Y,Z) = (Rx * Rz * Ry) * Rx(PI/2)*Ry(PI/2) * (x,y,1):
 
 X = (-d)*x + (cf    )*y + (ce    )*1
 Y = (ac)*x + (adf-be)*y + (ade+bf)*1
@@ -169,24 +195,56 @@ Z = (bc)*x + (bdf+ae)*y + (bde-af)*1
 // default yaw=0, pitch=0, roll=0
 function multiplyRotation(x, y) {
     // Rx(roll) * Rz(yaw) * Ry(pitch)
-    var a = Math.cos(param.gRoll),
-        b = Math.sin(param.gRoll);
-    var e = Math.cos(param.gPitch),
-        f = Math.sin(param.gPitch);
-    var c = Math.cos(param.gYaw),
-        d = Math.sin(param.gYaw);
-
-    // var X = (c * e) * x - (d) * y + (c * f) * 1;
-    // var Y = (a * d * e + b * f) * x + (a * c) * y + (a * d * f - b * e) * 1;
-    // var Z = (b * d * e - a * f) * x + (b * c) * y + (b * d * f + a * e) * 1;
-    var X = (-d) * x + (c * f) * y + (c * e) * 1;
-    var Y = (a * c) * x + (a * d * f - b * e) * y + (a * d * e + b * f) * 1;
-    var Z = (b * c) * x + (b * d * f + a * e) * y + (b * d * e - a * f) * 1;
+    var X = (-sinYaw) * x + (cosYaw * sinPitch) * y + (cosYaw * cosPitch) * 1;
+    var Y = (cosRoll * cosYaw) * x + (cosRoll * sinYaw * sinPitch - sinRoll * cosPitch) * y + (cosRoll * sinYaw * cosPitch + sinRoll * sinPitch) * 1;
+    var Z = (sinRoll * cosYaw) * x + (sinRoll * sinYaw * sinPitch + cosRoll * cosPitch) * y + (sinRoll * sinYaw * cosPitch - cosRoll * sinPitch) * 1;
 
     return {
         x: X,
         y: Y,
         z: Z
+    };
+}
+
+/*
+inversion matrix of 3d rotation matrix
+
+|a b c| = |-d  cf       ce    |
+|d e f| = |ac  adf-be   ade+bf|
+|g h i| = |bc  bdf+ae   bde-af|
+
+|a b c|-1              1            |ei-fh ch-bi bf-ce|
+|d e f|   = ----------------------- |fg-di ai-cg cd-af|
+|g h i|     aei-afh-bdi+bfg+cdh-ceg |dh-eg bg-ah ae-bd|
+*/
+function divideRotation(x, y, z) {
+    var a = -sinYaw,
+        b = cosYaw*sinPitch,
+        c = cosYaw*cosPitch,
+        d = cosRoll*cosYaw,
+        e = cosRoll*sinYaw*sinPitch-sinRoll*cosPitch,
+        f = cosRoll*sinYaw*cosPitch+sinRoll*sinPitch,
+        g = sinRoll*cosYaw,
+        h = sinRoll*sinYaw*sinPitch+cosRoll*cosPitch,
+        i = sinRoll*sinYaw*cosPitch-cosRoll*sinPitch;
+
+    var det = a*e*i - a*f*h - b*d*i + b*f*g + c*d*h - c*e*g;
+    var iDet = 1/det;
+
+    var m = [
+    [e*i-f*h, c*h-b*i, b*f-c*e],
+    [f*g-d*i, a*i-c*g, c*d-a*f],
+    [d*h-e*g, b*g-a*h, a*e-b*d]
+    ];
+
+    var X, Y, Z;
+    Z = (m[2][0]*x + m[2][1]*y + m[2][2]*z)*iDet;
+    X = (m[0][0]*x + m[0][1]*y + m[0][2]*z)/Z*iDet;
+    Y = (m[1][0]*x + m[1][1]*y + m[1][2]*z)/Z*iDet;
+
+    return {
+        x: X,
+        y: Y
     };
 }
 
@@ -219,17 +277,24 @@ function equiToLatlon(x, y) {
 }
 
 function calculateIntrinsic(pinholeWidth, pinholeHeight, hfov, skew) {
-    f = (pinholeWidth / 2.0) / Math.tan(toRadian(hfov) / 2.0);
-    cx = pinholeWidth / 2;
-    cy = pinholeHeight / 2;
-    fx = f;
-    fy = f;
-    skew = 0;
+    var f = (pinholeWidth / 2.0) / Math.tan(toRadian(hfov) / 2.0);
+    var cx = pinholeWidth / 2;
+    var cy = pinholeHeight / 2;
+    var fx = f;
+    var fy = f;
+    var skew = 0;
     a11 = (1.0 / fx);
     a12 = (-skew / (fx * fy));
     a13 = ((skew * cy - cx * fy) / (fx * fy));
     a22 = (1.0 / fy);
     a23 = (-cy / fy);
+
+    cosRoll = Math.cos(param.gRoll);
+    sinRoll = Math.sin(param.gRoll);
+    cosPitch = Math.cos(param.gPitch);
+    sinPitch = Math.sin(param.gPitch);
+    cosYaw = Math.cos(param.gYaw);
+    sinYaw = Math.sin(param.gYaw);
 }
 
 function toRadian(val) {
