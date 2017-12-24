@@ -2,7 +2,7 @@ var currentStep = 0;
 var MAX_STEP_NUM = 3;
 
 var worker = null;
-var image_set = { base: "360.png" };
+var image_set = { base: "360-compressed.jpg" };
 
 // Div
 var steps = [
