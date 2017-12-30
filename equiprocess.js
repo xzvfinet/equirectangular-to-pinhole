@@ -7,7 +7,7 @@ self.addEventListener("message", function(event) {
 
     param = event.data;
 
-    calculateIntrinsic(param.dstWidth, param.dstHeight, param.hfov, 0);
+    calculateIntrinsic(param.dstWidth, param.dstHeight, param.fov, 0);
 
     var result = {};
 
@@ -100,52 +100,130 @@ function backwardProjection(param) {
 }
 
 function getSrcPixelInterpolation(param, x, y) {
-    var data = param.srcData.data;
-    if (param.interpolation == 'bilinear') {
-
-    } else {
-        x = Math.round(x);
-        y = Math.round(y);
-        var srcInd = (y * param.srcWidth + x) * 4;
-
-        return [
-            data[srcInd + 0],
-            data[srcInd + 1],
-            data[srcInd + 2],
-            data[srcInd + 3]
-        ];
+    const args = [param.srcData.data, param.srcWidth, x, y];
+    var result;
+    if (param.interpolation == 'nearest') {
+        result = nearest(...args);
+    } else if (param.interpolation == 'bilinear') {
+        result = bilinear(...args);
+    } else if (param.interpolation == 'bicubic') {
+        result = bicubic(...args);
     }
 
+    return result;
 }
 
-function pinholeToSphere(x, y) {
-    var normalized = normalizeCameraParameters(x, y);
-    var rotated = multiplyRotation(normalized.x, normalized.y);
-
-    return {x:rotated.x, y:rotated.y, z:rotated.z};
+function nearest(data, width, x, y) {
+    x = Math.round(x);
+    y = Math.round(y);
+    var srcInd = (y * width + x) * 4;
+    return [
+        data[srcInd + 0],
+        data[srcInd + 1],
+        data[srcInd + 2],
+        data[srcInd + 3]
+    ];
 }
 
-function sphereToPinhole(x, y, z) {
-    var normalized = divideRotation(x, y, z);
-    var pinhole = applyCameraParameters(normalized.x, normalized.y);
+function bilinear(data, width, x, y) {
+    var x1 = Math.floor(x);
+    var x2 = Math.ceil(x);
+    var y1 = Math.floor(y);
+    var y2 = Math.ceil(y);
 
-    return {x:pinhole.x, y:pinhole.y};
+    var a = (x - x1) / (x2 - x1);
+    var b = (x2 - x) / (x2 - x1);
+    if (x2 == x1) {
+        a = 0.5;
+        b = 0.5;
+    }
+
+    var c = (y - y1) / (y2 - y1);
+    var d = (y2 - y) / (y2 - y1);
+    if (y2 == y1) {
+        c = 0.5;
+        d = 0.5;
+    }
+
+    var ind11 = (y1 * width + x1) * 4;
+    var ind12 = (y1 * width + x2) * 4;
+    var ind21 = (y2 * width + x1) * 4;
+    var ind22 = (y2 * width + x2) * 4;
+
+    var f1 = [
+        b * data[ind11 + 0] + a * data[ind12 + 0],
+        b * data[ind11 + 1] + a * data[ind12 + 1],
+        b * data[ind11 + 2] + a * data[ind12 + 2],
+        b * data[ind11 + 3] + a * data[ind12 + 3]
+    ];
+
+    var f2 = [
+        b * data[ind21 + 0] + a * data[ind22 + 0],
+        b * data[ind21 + 1] + a * data[ind22 + 1],
+        b * data[ind21 + 2] + a * data[ind22 + 2],
+        b * data[ind21 + 3] + a * data[ind22 + 3]
+    ];
+
+    return [
+        f1[0] * d + f2[0] * c,
+        f1[1] * d + f2[1] * c,
+        f1[2] * d + f2[2] * c,
+        f1[3] * d + f2[3] * c
+    ];
 }
 
-function equiToSphere(x, y) {
+function bicubic(data, width, x, y) {
 
-}
-
-function sphereToEqui(x, y, z) {
-    var latlon = normToLatlon(x, y, z);
-    var equiXY = latlonToEqui(latlon.lat, latlon.lon);
-    return equiXY;
 }
 
 function pinholeToEqui(x, y) {
     var spherePoint = pinholeToSphere(x, y);
     var equiPoint = sphereToEqui(spherePoint.x, spherePoint.y, spherePoint.z);
+    // console.log(Math.sqrt(Math.pow(spherePoint.x, 2) + Math.pow(spherePoint.y, 2) + Math.pow(spherePoint.z, 2)));
     return equiPoint;
+}
+
+function pinholeToSphere(x, y) {
+    var pinhole = { x: x, y: y };
+    var normalized = normalizeCameraParameters(pinhole.x, pinhole.y);
+    // console.log(normalized.x, normalized.y, Math.sqrt(5 - (Math.pow(normalized.x, 2) + Math.pow(normalized.y, 2))));
+    // var rotated = multiplyRotation(normalized.x, normalized.y, Math.sqrt(3 - (Math.pow(normalized.x, 2) + Math.pow(normalized.y, 2))));
+    var rotated = multiplyRotation(normalized.x, normalized.y, normalized.z);
+
+    // normalize distance (radius=1)
+    var s = Math.sqrt(Math.pow(rotated.x, 2) + Math.pow(rotated.y, 2) + Math.pow(rotated.z, 2));
+    // rotated.x /= s;
+    // rotated.y /= s;
+    // rotated.z /= s;
+
+    return rotated;
+}
+
+function sphereToEqui(x, y, z) {
+    var sphere = { x: x, y: y, z: z };
+    var latlon = normToLatlon(sphere.x, sphere.y, sphere.z);
+    var equi = latlonToEqui(latlon.lat, latlon.lon);
+    return equi;
+}
+
+function normToLatlon(x, y, z) {
+    var r = Math.sqrt(x * x + y * y);
+    // console.log('r1: ' + r);
+    // console.log('r2: ' + (x * x + y * y + z * z));
+    return {
+        lon: Math.atan2(y, x),
+        lat: safeAtan(-z, r)
+    }
+}
+
+function latlonToEqui(lat, lon) {
+    var x = wrapZeroToOne(lon / (Math.PI * 2) + 0.5) * param.srcWidth;
+    var y = reflectZeroToOne(lat / Math.PI + 0.5) * (param.srcHeight - 1);
+    y = param.srcHeight - y - 1;
+    return {
+        x: x,
+        y: y
+    }
 }
 
 function equiToPinhole(x, y) {
@@ -155,49 +233,74 @@ function equiToPinhole(x, y) {
     return pinholePoint;
 }
 
-// Commonly there are two parameters, intrinsic and extrinsic
-// But in this situation we suppose that extrinsic is an identity matrix
-var a11,a12,a13,a22,a23;
-function normalizeCameraParameters(x, y) {
+function sphereToPinhole(x, y, z) {
+    var rotated = { x: x, y: y, z: z };
+    var normalized = divideRotation(rotated.x, rotated.y, rotated.z);
+    var pinhole = applyCameraParameters(normalized.x, normalized.y);
+    return pinhole;
+}
+
+function equiToSphere(x, y) {
+    var equi = { x: x, y: y };
+    var latlon = equiToLatlon(equi.x, equi.y);
+    var sphere = latlonToNorm(latlon.lat, latlon.lon);
+    return sphere;
+}
+
+function latlonToNorm(lat, lon) {
+
+}
+
+function equiToLatlon(x, y) {
+    var lon = (x / param.srcWidth - 0.5) * Math.PI * 2;
+    var lat = ((param.srcHeight - y - 1.0) / (param.srcHeight - 1) - 0.5) * Math.PI;
     return {
-        x: a11 * x + a12 * y + a13,
-        y: a22 * y + a23
+        lon: lon,
+        lat: lat
     };
 }
 
+function normalizeCameraParameters(x, y) {
+    var newx = a11 * x + a12 * y + a13;
+    var newy = a22 * y + a23;
+    var newz = f / (1 - f);
+    return {
+        x: newx,
+        y: newy,
+        z: 1
+    };
+}
+
+function applyCameraParameters(x, y) {
+    var newy = (y - a23) / a22;
+    var newx = ((x - a13) - newy * a12) / a11;
+    return {
+        x: newx,
+        y: newy
+    }
+}
+
 /*
-Rx:     Ry:     Rz:
-1 0 0   e 0 f   c -d 0
-0 a -b  0 1 0   d c 0
-0 b a   -f 0 e  0 0 1
-
-Rx * Rz * Ry:
-|ce      -d cf    |
-|ade+bf  ac adf-be|
-|bde-af  bc bdf+ae|
-
-Rx(PI/2) * Ry(PI/2):
-|1 0  0|   | 0 0 1|   |0 0 1|
-|0 0 -1| X | 0 1 0| = |1 0 0|
-|0 1  0|   |-1 0 0|   |0 1 0|
-
-Rx * Rz * Ry * Rx(PI/2) * Ry(PI/2):
-|ce      -d cf    |   |0 0 1|   |-d  cf       ce    |
-|ade+bf  ac adf-be| X |1 0 0| = |ac  adf-be   ade+bf|
-|bde-af  bc bdf+ae|   |0 1 0|   |bc  bdf+ae   bde-af|
-
-(X,Y,Z) = (Rx * Rz * Ry) * Rx(PI/2)*Ry(PI/2) * (x,y,1):
-
-X = (-d)*x + (cf    )*y + (ce    )*1
-Y = (ac)*x + (adf-be)*y + (ade+bf)*1
-Z = (bc)*x + (bdf+ae)*y + (bde-af)*1
+Refer to matrix.txt
 */
 // default yaw=0, pitch=0, roll=0
-function multiplyRotation(x, y) {
+function multiplyRotation(x, y, z) {
     // Rx(roll) * Rz(yaw) * Ry(pitch)
-    var X = (-sinYaw) * x + (cosYaw * sinPitch) * y + (cosYaw * cosPitch) * 1;
-    var Y = (cosRoll * cosYaw) * x + (cosRoll * sinYaw * sinPitch - sinRoll * cosPitch) * y + (cosRoll * sinYaw * cosPitch + sinRoll * sinPitch) * 1;
-    var Z = (sinRoll * cosYaw) * x + (sinRoll * sinYaw * sinPitch + cosRoll * cosPitch) * y + (sinRoll * sinYaw * cosPitch - cosRoll * sinPitch) * 1;
+
+    // X(pi/2), Y(pi/2)
+    var X = (-sinYaw) * x + (cosYaw * sinPitch) * y + (cosYaw * cosPitch) * z;
+    var Y = (cosRoll * cosYaw) * x + (cosRoll * sinYaw * sinPitch - sinRoll * cosPitch) * y + (cosRoll * sinYaw * cosPitch + sinRoll * sinPitch) * z;
+    var Z = (sinRoll * cosYaw) * x + (sinRoll * sinYaw * sinPitch + cosRoll * cosPitch) * y + (sinRoll * sinYaw * cosPitch - cosRoll * sinPitch) * z;
+
+    // X(pi/2)
+    // var X = (cosYaw * cosPitch) * x + (cosYaw * sinPitch) * y - (-sinYaw) * z;
+    // var Y = (cosRoll * sinYaw * cosPitch + sinRoll * sinPitch) * x + (cosRoll * sinYaw * sinPitch - sinRoll * cosPitch) * y - (cosRoll * cosYaw) * z;
+    // var Z = (sinRoll * sinYaw * cosPitch - cosRoll * sinPitch) * x + (sinRoll * sinYaw * sinPitch + cosRoll * cosPitch) * y - (sinRoll * cosYaw) * z;
+
+    // no rotation
+    // var X = (cosYaw * cosPitch) * x + (-sinYaw) * y + (cosYaw * sinPitch) * z;
+    // var Y = (cosRoll * sinYaw * cosPitch + sinRoll * sinPitch) * x + (cosRoll * cosYaw) * y + (cosRoll * sinYaw * sinPitch - sinRoll * cosPitch) * z;
+    // var Z = (sinRoll * sinYaw * cosPitch - cosRoll * sinPitch) * x + (sinRoll * cosYaw) * y + (sinRoll * sinYaw * sinPitch + cosRoll * cosPitch) * z;
 
     return {
         x: X,
@@ -219,28 +322,28 @@ inversion matrix of 3d rotation matrix
 */
 function divideRotation(x, y, z) {
     var a = -sinYaw,
-        b = cosYaw*sinPitch,
-        c = cosYaw*cosPitch,
-        d = cosRoll*cosYaw,
-        e = cosRoll*sinYaw*sinPitch-sinRoll*cosPitch,
-        f = cosRoll*sinYaw*cosPitch+sinRoll*sinPitch,
-        g = sinRoll*cosYaw,
-        h = sinRoll*sinYaw*sinPitch+cosRoll*cosPitch,
-        i = sinRoll*sinYaw*cosPitch-cosRoll*sinPitch;
+        b = cosYaw * sinPitch,
+        c = cosYaw * cosPitch,
+        d = cosRoll * cosYaw,
+        e = cosRoll * sinYaw * sinPitch - sinRoll * cosPitch,
+        f = cosRoll * sinYaw * cosPitch + sinRoll * sinPitch,
+        g = sinRoll * cosYaw,
+        h = sinRoll * sinYaw * sinPitch + cosRoll * cosPitch,
+        i = sinRoll * sinYaw * cosPitch - cosRoll * sinPitch;
 
-    var det = a*e*i - a*f*h - b*d*i + b*f*g + c*d*h - c*e*g;
-    var iDet = 1/det;
+    var det = a * e * i - a * f * h - b * d * i + b * f * g + c * d * h - c * e * g;
+    var iDet = 1 / det;
 
     var m = [
-    [e*i-f*h, c*h-b*i, b*f-c*e],
-    [f*g-d*i, a*i-c*g, c*d-a*f],
-    [d*h-e*g, b*g-a*h, a*e-b*d]
+        [e * i - f * h, c * h - b * i, b * f - c * e],
+        [f * g - d * i, a * i - c * g, c * d - a * f],
+        [d * h - e * g, b * g - a * h, a * e - b * d]
     ];
 
     var X, Y, Z;
-    Z = (m[2][0]*x + m[2][1]*y + m[2][2]*z)*iDet;
-    X = (m[0][0]*x + m[0][1]*y + m[0][2]*z)/Z*iDet;
-    Y = (m[1][0]*x + m[1][1]*y + m[1][2]*z)/Z*iDet;
+    Z = (m[2][0] * x + m[2][1] * y + m[2][2] * z) * iDet;
+    X = (m[0][0] * x + m[0][1] * y + m[0][2] * z) / Z * iDet;
+    Y = (m[1][0] * x + m[1][1] * y + m[1][2] * z) / Z * iDet;
 
     return {
         x: X,
@@ -248,41 +351,26 @@ function divideRotation(x, y, z) {
     };
 }
 
-function normToLatlon(x, y, z) {
-    var r = Math.sqrt(x * x + y * y);
-    return {
-        lon: Math.atan2(y, x),
-        lat: safeAtan(-z, r)
-    }
-}
+// Commonly there are two parameters, intrinsic and extrinsic
+// But we can assume that extrinsic is the identity matrix
+var a11, a12, a13, a22, a23;
+/*
+f: focal length
+fov: horizontal field of view
+cx: center x positoin
+cy: center y position
+*/
+var f;
 
-function latlonToEqui(lat, lon) {
-    var x = wrapZeroToOne(lon / (Math.PI * 2) + 0.5) * param.srcWidth;
-    var y = reflectZeroToOne(lat / Math.PI + 0.5) * (param.srcHeight - 1);
-    y = param.srcHeight - y - 1;
-    return {
-        x: x,
-        y: y
-    }
-}
+function calculateIntrinsic(pinholeWidth, pinholeHeight, fov, skew) {
+    var length = (param['option'] == 'width') ? pinholeWidth : pinholeHeight;
+    f = (length / 2.0) / Math.tan(toRadian(fov) / 2.0);
 
-function equiToLatlon(x, y) {
-    // var lat =
-    //     var lon =
-
-    //         return {
-    //             lat: lat,
-    //             lon: lon
-    //         }
-}
-
-function calculateIntrinsic(pinholeWidth, pinholeHeight, hfov, skew) {
-    var f = (pinholeWidth / 2.0) / Math.tan(toRadian(hfov) / 2.0);
-    var cx = pinholeWidth / 2;
-    var cy = pinholeHeight / 2;
+    // console.log(f);
     var fx = f;
     var fy = f;
-    var skew = 0;
+    var cx = pinholeWidth / 2;
+    var cy = pinholeHeight / 2;
     a11 = (1.0 / fx);
     a12 = (-skew / (fx * fy));
     a13 = ((skew * cy - cx * fy) / (fx * fy));

@@ -3,7 +3,7 @@
 
 <head>
     <title></title>
-    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha256-k2WSCIexGzOj3Euiig+TlR8gA0EmPjuc79OEeY5L45g=" crossorigin="anonymous"></script>
+    <script src="jquery-3.2.1.slim.min.js" crossorigin="anonymous"></script>
     <style type="text/css">
     #myProgress {
         width: 100%;
@@ -58,8 +58,8 @@
         </div>
         <div id="header">
             <h1>Equirectangular -> Pinhole -> Equirectangular</h1>
-            <button id="prev-btn" onclick="prevStep()">Prev</button>
-            <button id="next-btn" onclick="nextStep()">Next</button>
+            <button id="prev-btn" onclick="prevStep()" disabled="true">Prev</button>
+            <button id="next-btn" onclick="nextStep()" disabled="true">Next</button>
         </div>
         <div id="body">
             <div id="step1">
@@ -73,11 +73,17 @@
                         </p>
                         <p>
                             <label>Width</label>
-                            <input type="text" value="600" name="input-width">
+                            <input type="text" value="500" name="input-width">
+                            <label>
+                                <input type="radio" name="option" value="width" checked>
+                            </label>
                         </p>
                         <p>
                             <label>Height</label>
                             <input type="text" value="500" name="input-height">
+                            <label>
+                                <input type="radio" name="option" value="height">
+                            </label>
                         </p>
                     </form>
                 </div>
@@ -89,7 +95,8 @@
                         <progress id="load-progress" value="0" max="100"></progress>
                     </div>
                 </div>
-                <p><a id="dl-orig" download="canvas_original.png" href="#">Download</a></p>
+                <p><a id="dl-orig" href="#">Download</a></p>
+                <button onclick="clickCenter()">Click Center</button>
             </div>
             <div id="step2">
                 <h2>Step2.</h2>
@@ -98,13 +105,13 @@
                     <div id="myBar"></div>
                 </div>
                 <canvas id="base-canvas"></canvas>
-                <p><a id="dl-base" download="canvas_base.png" href="#">Download</a></p>
+                <p><a id="dl-base" href="#">Download</a></p>
             </div>
             <div id="step3">
                 <h2>Step3.</h2>
                 <p>Re-projected Image</p>
                 <canvas id="result-resized-canvas"></canvas>
-                <p><a id="dl-result" download="canvas_result.png" href="#">Download</a></p>
+                <p><a id="dl-result" href="#">Download</a></p>
             </div>
         </div>
         <!-- <div id="footer"></div> -->
@@ -117,9 +124,14 @@ document.querySelector('input[type=range]').addEventListener('input', function r
 });
 
 $("input").change(function() {
-    var params = [$('input[name=input-fov]')[0].value, $('input[name=input-width]')[0].value, $('input[name=input-height]')[0].value];
+    var params = {
+        'fov': $('input[name=input-fov]')[0].value,
+        'width': $('input[name=input-width]')[0].value,
+        'height': $('input[name=input-height]')[0].value,
+        'option': $('input:checked[name=option]')[0].value
+    };
     console.log(params);
-    updateByParameter(params[0], params[1], params[2]);
+    updateByParameter(params);
 });
 </script>
 

@@ -1,0 +1,35 @@
+Rx:     Ry:     Rz:
+1 0 0   e 0 f   c -d 0
+0 a -b  0 1 0   d c 0
+0 b a   -f 0 e  0 0 1
+
+Rx * Rz * Ry:
+|ce      -d cf    |
+|ade+bf  ac adf-be|
+|bde-af  bc bdf+ae|
+
+Rx * Ry * Rz:
+|ce 		-de 	f  |
+|cbf+ad 	-bdf+ac -be|
+|-acf+bd adf+bc 	ae |
+
+Rx(PI/2) * Ry(PI/2):
+|1 0  0|   | 0 0 1|   |0 0 1|
+|0 0 -1| X | 0 1 0| = |1 0 0|
+|0 1  0|   |-1 0 0|   |0 1 0|
+
+Rx * Rz * Ry * Rx(PI/2) * Ry(PI/2):
+|ce      -d cf    |   |0 0 1|   |-d  cf       ce    |
+|ade+bf  ac adf-be| X |1 0 0| = |ac  adf-be   ade+bf|
+|bde-af  bc bdf+ae|   |0 1 0|   |bc  bdf+ae   bde-af|
+
+Rx * Rz * Ry * Rx(PI/2):
+                      |1 0  0|   |ce     cf     d  |
+                      |0 0 -1| = |ade+bf adf-be -ac|
+                      |0 1  0|   |bde-af bdf+ae -bc|
+
+(X,Y,Z) = (Rx * Rz * Ry) * Rx(PI/2)*Ry(PI/2) * (x,y,1):
+
+X = (-d)*x + (cf    )*y + (ce    )*1
+Y = (ac)*x + (adf-be)*y + (ade+bf)*1
+Z = (bc)*x + (bdf+ae)*y + (bde-af)*1
