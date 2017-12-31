@@ -286,9 +286,14 @@ function mymouseclick(event) {
     updateByPostion(event.layerX, event.layerY);
 }
 
-window.clickCenter = function() {
+window.clickScreen = function(pos) {
     var center = { layerX: resized_canvas.width / 2, layerY: resized_canvas.height / 2 };
-    mymouseclick(center);
+    var bottom = { layerX: resized_canvas.width / 2, layerY: resized_canvas.height };
+    var top = { layerX: resized_canvas.width / 2, layerY: 0 };
+    var left = { layerX: 0, layerY: resized_canvas.height / 2 };
+    var right = { layerX: resized_canvas.width, layerY: resized_canvas.height / 2 };
+
+    mymouseclick(eval(pos));
 }
 
 function updateByPostion(x, y) {

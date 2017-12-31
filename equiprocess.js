@@ -173,28 +173,19 @@ function bilinear(data, width, x, y) {
 }
 
 function bicubic(data, width, x, y) {
-
+    // not implemented
 }
 
 function pinholeToEqui(x, y) {
     var spherePoint = pinholeToSphere(x, y);
     var equiPoint = sphereToEqui(spherePoint.x, spherePoint.y, spherePoint.z);
-    // console.log(Math.sqrt(Math.pow(spherePoint.x, 2) + Math.pow(spherePoint.y, 2) + Math.pow(spherePoint.z, 2)));
     return equiPoint;
 }
 
 function pinholeToSphere(x, y) {
     var pinhole = { x: x, y: y };
     var normalized = normalizeCameraParameters(pinhole.x, pinhole.y);
-    // console.log(normalized.x, normalized.y, Math.sqrt(5 - (Math.pow(normalized.x, 2) + Math.pow(normalized.y, 2))));
-    // var rotated = multiplyRotation(normalized.x, normalized.y, Math.sqrt(3 - (Math.pow(normalized.x, 2) + Math.pow(normalized.y, 2))));
     var rotated = multiplyRotation(normalized.x, normalized.y, normalized.z);
-
-    // normalize distance (radius=1)
-    var s = Math.sqrt(Math.pow(rotated.x, 2) + Math.pow(rotated.y, 2) + Math.pow(rotated.z, 2));
-    // rotated.x /= s;
-    // rotated.y /= s;
-    // rotated.z /= s;
 
     return rotated;
 }
@@ -208,17 +199,17 @@ function sphereToEqui(x, y, z) {
 
 function normToLatlon(x, y, z) {
     var r = Math.sqrt(x * x + y * y);
-    // console.log('r1: ' + r);
-    // console.log('r2: ' + (x * x + y * y + z * z));
     return {
         lon: Math.atan2(y, x),
-        lat: safeAtan(-z, r)
+        lat: Math.atan2(-z, r)
     }
 }
 
+// lon: -PI ~ +PI
+// lat: -PI/2 ~ +PI/2
 function latlonToEqui(lat, lon) {
     var x = wrapZeroToOne(lon / (Math.PI * 2) + 0.5) * param.srcWidth;
-    var y = reflectZeroToOne(lat / Math.PI + 0.5) * (param.srcHeight - 1);
+    var y = (lat / Math.PI + 0.5) * (param.srcHeight - 1);
     y = param.srcHeight - y - 1;
     return {
         x: x,
@@ -233,13 +224,6 @@ function equiToPinhole(x, y) {
     return pinholePoint;
 }
 
-function sphereToPinhole(x, y, z) {
-    var rotated = { x: x, y: y, z: z };
-    var normalized = divideRotation(rotated.x, rotated.y, rotated.z);
-    var pinhole = applyCameraParameters(normalized.x, normalized.y);
-    return pinhole;
-}
-
 function equiToSphere(x, y) {
     var equi = { x: x, y: y };
     var latlon = equiToLatlon(equi.x, equi.y);
@@ -247,8 +231,35 @@ function equiToSphere(x, y) {
     return sphere;
 }
 
-function latlonToNorm(lat, lon) {
+function sphereToPinhole(x, y, z) {
+    var rotated = { x: x, y: y, z: z };
+    var normalized = divideRotation(rotated.x, rotated.y, rotated.z);
+    var pinhole = applyCameraParameters(normalized.x, normalized.y);
+    return pinhole;
+}
 
+/*
+ax = a*x
+ay = a*y
+az = a*z
+ar = a*r
+(a: scaling constant)
+*/
+function latlonToNorm(lat, lon) {
+    var ax = 1;
+    var ay = Math.tan(lon);
+    var ar = Math.sqrt(ax * ax + ay * ay);
+    var az = -Math.tan(lat) * ar;
+    var a = Math.sqrt(ax * ax + ay * ay + az * az);
+
+    var xSign = Math.cos(lon) / Math.abs(Math.cos(lon));
+    var ySign = Math.sin(lon) / Math.abs(Math.sin(lon));
+
+    var x = Math.abs(ax / a) * xSign;
+    var y = Math.abs(ay / a) * ySign;
+    var z = az / a;
+
+    return { x: x, y: y, z: z };
 }
 
 function equiToLatlon(x, y) {
@@ -263,11 +274,12 @@ function equiToLatlon(x, y) {
 function normalizeCameraParameters(x, y) {
     var newx = a11 * x + a12 * y + a13;
     var newy = a22 * y + a23;
-    var newz = f / (1 - f);
+    var newz = 1;
+    var s = Math.sqrt(newx * newx + newy * newy + newz * newz);
     return {
-        x: newx,
-        y: newy,
-        z: 1
+        x: newx / s,
+        y: newy / s,
+        z: newz / s
     };
 }
 
@@ -283,24 +295,10 @@ function applyCameraParameters(x, y) {
 /*
 Refer to matrix.txt
 */
-// default yaw=0, pitch=0, roll=0
 function multiplyRotation(x, y, z) {
-    // Rx(roll) * Rz(yaw) * Ry(pitch)
-
-    // X(pi/2), Y(pi/2)
     var X = (-sinYaw) * x + (cosYaw * sinPitch) * y + (cosYaw * cosPitch) * z;
     var Y = (cosRoll * cosYaw) * x + (cosRoll * sinYaw * sinPitch - sinRoll * cosPitch) * y + (cosRoll * sinYaw * cosPitch + sinRoll * sinPitch) * z;
     var Z = (sinRoll * cosYaw) * x + (sinRoll * sinYaw * sinPitch + cosRoll * cosPitch) * y + (sinRoll * sinYaw * cosPitch - cosRoll * sinPitch) * z;
-
-    // X(pi/2)
-    // var X = (cosYaw * cosPitch) * x + (cosYaw * sinPitch) * y - (-sinYaw) * z;
-    // var Y = (cosRoll * sinYaw * cosPitch + sinRoll * sinPitch) * x + (cosRoll * sinYaw * sinPitch - sinRoll * cosPitch) * y - (cosRoll * cosYaw) * z;
-    // var Z = (sinRoll * sinYaw * cosPitch - cosRoll * sinPitch) * x + (sinRoll * sinYaw * sinPitch + cosRoll * cosPitch) * y - (sinRoll * cosYaw) * z;
-
-    // no rotation
-    // var X = (cosYaw * cosPitch) * x + (-sinYaw) * y + (cosYaw * sinPitch) * z;
-    // var Y = (cosRoll * sinYaw * cosPitch + sinRoll * sinPitch) * x + (cosRoll * cosYaw) * y + (cosRoll * sinYaw * sinPitch - sinRoll * cosPitch) * z;
-    // var Z = (sinRoll * sinYaw * cosPitch - cosRoll * sinPitch) * x + (sinRoll * cosYaw) * y + (sinRoll * sinYaw * sinPitch + cosRoll * cosPitch) * z;
 
     return {
         x: X,
@@ -310,15 +308,7 @@ function multiplyRotation(x, y, z) {
 }
 
 /*
-inversion matrix of 3d rotation matrix
-
-|a b c| = |-d  cf       ce    |
-|d e f| = |ac  adf-be   ade+bf|
-|g h i| = |bc  bdf+ae   bde-af|
-
-|a b c|-1              1            |ei-fh ch-bi bf-ce|
-|d e f|   = ----------------------- |fg-di ai-cg cd-af|
-|g h i|     aei-afh-bdi+bfg+cdh-ceg |dh-eg bg-ah ae-bd|
+Refer to matrix.txt
 */
 function divideRotation(x, y, z) {
     var a = -sinYaw,
@@ -366,7 +356,6 @@ function calculateIntrinsic(pinholeWidth, pinholeHeight, fov, skew) {
     var length = (param['option'] == 'width') ? pinholeWidth : pinholeHeight;
     f = (length / 2.0) / Math.tan(toRadian(fov) / 2.0);
 
-    // console.log(f);
     var fx = f;
     var fy = f;
     var cx = pinholeWidth / 2;
@@ -389,29 +378,10 @@ function toRadian(val) {
     return val * Math.PI / 180;
 }
 
-function safeAtan(y, x) {
-    if (x == 0.0) {
-        if (y >= 0.0)
-            return Math.PI / 2;
-        else
-            return -Math.PI / 2;
-    }
-    return Math.atan(y / x);
-}
-
 function wrapZeroToOne(value) {
-    if (value >= 0)
+    if (value >= 0) {
         return value % 1.0;
-    else {
+    } else {
         return (1.0 + (value % 1.0)) % 1.0;
     }
-}
-
-function reflectZeroToOne(value) {
-    if (value < 0)
-        value = -value;
-    value = value % 2.0;
-    if (value > 1.0)
-        return 2.0 - value;
-    return value;
 }

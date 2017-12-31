@@ -33,3 +33,15 @@ Rx * Rz * Ry * Rx(PI/2):
 X = (-d)*x + (cf    )*y + (ce    )*1
 Y = (ac)*x + (adf-be)*y + (ade+bf)*1
 Z = (bc)*x + (bdf+ae)*y + (bde-af)*1
+
+
+
+inversion matrix of 3d rotation matrix
+
+|a b c| = |-d  cf       ce    |
+|d e f| = |ac  adf-be   ade+bf|
+|g h i| = |bc  bdf+ae   bde-af|
+
+|a b c|-1              1            |ei-fh ch-bi bf-ce|
+|d e f|   = ----------------------- |fg-di ai-cg cd-af|
+|g h i|     aei-afh-bdi+bfg+cdh-ceg |dh-eg bg-ah ae-bd|
