@@ -35,8 +35,6 @@ function forwardProjection(param) {
 
     // for work progress bar
     var counter = 0;
-    var length = param.dstHeight / 100;
-    var adder = length;
 
     var size = 4 * param.dstWidth * param.dstHeight;
     var dstData = param.dstData;
@@ -49,7 +47,7 @@ function forwardProjection(param) {
         for (var col = 0; col < param.dstWidth; ++col) {
             var equi = pinholeToEqui(col, row);
 
-            var srcPixel = getSrcPixelInterpolation(param, equi.x, equi.y);
+            var srcPixel = getPixelInterpolation(param.srcData.data, param.srcWidth, equi.x, equi.y);
             var dstInd = (row * param.dstWidth + col) * 4;
 
             dstData.data[dstInd + 0] = srcPixel[0];
@@ -59,8 +57,7 @@ function forwardProjection(param) {
         }
 
         // add up progress
-        length += adder;
-        self.postMessage({ counter: ++counter });
+        self.postMessage({ direction: "forward", counter: ++counter });
     }
 
     return dstData;
@@ -69,38 +66,36 @@ function forwardProjection(param) {
 function backwardProjection(param) {
     // for work progress counting
     var counter = 0;
-    var length = param.dstHeight / 100;
-    var adder = length;
 
     var mixedData = param.mixedData;
     var resultData = param.resultData;
 
     var index = 0;
-    for (var row = 0; row < mixedData.height; ++row) {
-        for (var col = 0; col < mixedData.width; ++col) {
-            if (row >= length) {
-                length += adder;
-                self.postMessage({ counter: ++counter });
-            }
+    for (var row = 0; row < resultData.height; ++row) {
+        for (var col = 0; col < resultData.width; ++col) {
 
-            var equi = pinholeToEqui(col, row);
-            equi.x = Math.round(equi.x);
-            equi.y = Math.round(equi.y);
+            var pinhole = equiToPinhole(col, row);
+            if (pinhole.x < 0 || pinhole.x > mixedData.width) continue;
+            if (pinhole.y < 0 || pinhole.y > mixedData.height) continue;
 
-            var ind_mixed = (row * mixedData.width + col) * 4;
-            var ind_orig = (equi.y * resultData.width + equi.x) * 4;
-            resultData.data[ind_orig + 0] = mixedData.data[ind_mixed + 0];
-            resultData.data[ind_orig + 1] = mixedData.data[ind_mixed + 1];
-            resultData.data[ind_orig + 2] = mixedData.data[ind_mixed + 2];
-            resultData.data[ind_orig + 3] = mixedData.data[ind_mixed + 3];
+            var pixel = getPixelInterpolation(mixedData.data, mixedData.width, pinhole.x, pinhole.y);
+
+            var ind_mixed = (pinhole.y * mixedData.width + pinhole.x) * 4;
+            var ind_orig = (row * resultData.width + col) * 4;
+            resultData.data[ind_orig + 0] = pixel[0];
+            resultData.data[ind_orig + 1] = pixel[1];
+            resultData.data[ind_orig + 2] = pixel[2];
+            resultData.data[ind_orig + 3] = pixel[3];
         }
+
+        self.postMessage({ direction: "backward", counter: ++counter });
     }
 
     return resultData;
 }
 
-function getSrcPixelInterpolation(param, x, y) {
-    const args = [param.srcData.data, param.srcWidth, x, y];
+function getPixelInterpolation(data, width, x, y) {
+    const args = [data, width, x, y];
     var result;
     if (param.interpolation == 'nearest') {
         result = nearest(...args);
@@ -238,30 +233,6 @@ function sphereToPinhole(x, y, z) {
     return pinhole;
 }
 
-/*
-ax = a*x
-ay = a*y
-az = a*z
-ar = a*r
-(a: scaling constant)
-*/
-function latlonToNorm(lat, lon) {
-    var ax = 1;
-    var ay = Math.tan(lon);
-    var ar = Math.sqrt(ax * ax + ay * ay);
-    var az = -Math.tan(lat) * ar;
-    var a = Math.sqrt(ax * ax + ay * ay + az * az);
-
-    var xSign = Math.cos(lon) / Math.abs(Math.cos(lon));
-    var ySign = Math.sin(lon) / Math.abs(Math.sin(lon));
-
-    var x = Math.abs(ax / a) * xSign;
-    var y = Math.abs(ay / a) * ySign;
-    var z = az / a;
-
-    return { x: x, y: y, z: z };
-}
-
 function equiToLatlon(x, y) {
     var lon = (x / param.srcWidth - 0.5) * Math.PI * 2;
     var lat = ((param.srcHeight - y - 1.0) / (param.srcHeight - 1) - 0.5) * Math.PI;
@@ -270,6 +241,29 @@ function equiToLatlon(x, y) {
         lat: lat
     };
 }
+
+/*
+ax = a*x
+ay = a*y
+az = a*z
+ar = a*r
+(a: scaling constant)
+*/
+function latlonToNorm(lat, lon) {
+    var ax = Math.cos(lon);
+    var ay = Math.sin(lon);
+    var ar = Math.sqrt(ax * ax + ay * ay);
+    var az = -Math.tan(lat) * ar;
+    var a = Math.sqrt(ax * ax + ay * ay + az * az);
+
+    var x = ax / a;
+    var y = ay / a;
+    var z = az / a;
+
+    return { x: x, y: y, z: z };
+}
+
+
 
 function normalizeCameraParameters(x, y) {
     var newx = a11 * x + a12 * y + a13;

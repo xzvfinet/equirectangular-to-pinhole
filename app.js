@@ -11,6 +11,12 @@ var steps = [
     document.getElementById("step3")
 ];
 
+// bar
+var forwardBarEl = document.getElementById("forwardBar");
+var backwardBarEl = document.getElementById("backwardBar");
+forwardBarEl.progress = 1;
+backwardBarEl.progress = 1;
+
 // extracted canvas
 orig_canvas = document.getElementById("original-360");
 orig_ctx = orig_canvas.getContext('2d');
@@ -40,8 +46,6 @@ var ratio = 1;
 // Camera parameters
 var dstWidth = Number(document.getElementsByName('input-width')[0].value);
 var dstHeight = Number(document.getElementsByName('input-height')[0].value);
-var newWidth;
-var newHeight;
 var fov = Number(document.getElementsByName('input-fov')[0].value); //  in degrees
 var option = 'width';
 var gYaw = 0,
@@ -72,6 +76,9 @@ window.onload = function() {
     orig_img.load(image_set.base);
     resized_canvas.width = viewWidth;
     resized_canvas.height = viewWidth / 2;
+
+    result_resized_canvas.width = resized_canvas.width;
+    result_resized_canvas.height = resized_canvas.height;
 
     base_canvas.width = dstWidth;
     base_canvas.height = dstHeight;
@@ -104,9 +111,11 @@ function updateBase() {
 }
 
 function update360() {
+    move(backwardBarEl, result_resized_canvas.height, 1);
+
     worker.postMessage({
         direction: "backward",
-        interpolation: "",
+        interpolation: "bilinear",
         mixedData: base_ctx.getImageData(0, 0, base_canvas.width, base_canvas.height),
         resultData: result_ctx.getImageData(0, 0, resized_canvas.width, resized_canvas.height),
         srcWidth: resized_canvas.width,
@@ -123,7 +132,7 @@ function update360() {
 
 function updateFrame() {
     resized_ctx.drawImage(orig_canvas, 0, 0, orig_img.width * ratio, orig_img.height * ratio);
-    move(1);
+    move(forwardBarEl, dstHeight, 1);
 
     var points = [];
     points = points.concat(getLinePoints(0, 0, dstWidth, 0, segmentNum));
@@ -146,23 +155,18 @@ function updateFrame() {
     });
 }
 
-function getLatlonPoint(x, y) {
-    var a = equiToLatlon(x / ratio, y / ratio, orig_img.width, orig_img.height);
-    console.log(a);
-}
-
 function onmessage(event) {
     var result = event.data.result;
     if (event.data.finished) {
         switch (event.data.direction) {
             case "forward":
+                // base_ctx.imageSmoothingEnabled = false;
+                // base_ctx.imageSmoothingQuality = "high";
                 base_ctx.putImageData(result.data, 0, 0);
 
                 break;
             case "backward":
                 // back to equirectangular
-                result_resized_canvas.width = resized_canvas.width;
-                result_resized_canvas.height = resized_canvas.height;
 
                 result_resized_ctx.imageSmoothingQuality = 'high';
                 result_resized_ctx.putImageData(result.data, 0, 0);
@@ -194,7 +198,11 @@ function onmessage(event) {
         }
     } else {
         // processing
-        move();
+        if (event.data.direction == 'forward') {
+            move(forwardBarEl, dstHeight);
+        } else {
+            move(backwardBarEl, result_resized_canvas.height);
+        }
     }
 
 }
@@ -236,17 +244,13 @@ function setDirection(yaw, pitch, roll) {
     gRoll = roll;
 }
 
-var progress = 1;
-
-var barEl = document.getElementById("myBar");
-
-function move(val) {
+function move(el, full, val) {
     if (val) {
-        progress = val;
-        barEl.style.width = 100 * (progress / dstHeight) + '%';
+        el.progress = val;
+        el.style.width = 100 * (el.progress / full) + '%';
     } else {
-        progress++;
-        barEl.style.width = 100 * (progress / dstHeight) + '%';
+        el.progress++;
+        el.style.width = 100 * (el.progress / full) + '%';
     }
 }
 

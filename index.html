@@ -5,12 +5,12 @@
     <title></title>
     <script src="jquery-3.2.1.slim.min.js" crossorigin="anonymous"></script>
     <style type="text/css">
-    #myProgress {
+    .myProgress {
         width: 100%;
         background-color: grey;
     }
 
-    #myBar {
+    .myBar {
         width: 1%;
         height: 30px;
         background-color: green;
@@ -69,7 +69,7 @@
                     <form>
                         <p>
                             <label>FOV</label>
-                            <input id="fovController" type="range" value="80" min=45 max=120 name="input-fov">
+                            <input id="fovController" type="range" value="90" min=45 max=120 name="input-fov">
                         </p>
                         <p>
                             <label>Width</label>
@@ -105,8 +105,8 @@
             <div id="step2">
                 <h2>Step2.</h2>
                 <p>Extracted Image</p>
-                <div id="myProgress">
-                    <div id="myBar"></div>
+                <div class="myProgress">
+                    <div id="forwardBar" class="myBar"></div>
                 </div>
                 <canvas id="base-canvas"></canvas>
                 <p><a id="dl-base" href="#">Download</a></p>
@@ -114,6 +114,9 @@
             <div id="step3">
                 <h2>Step3.</h2>
                 <p>Re-projected Image</p>
+                <div class="myProgress">
+                    <div id="backwardBar" class="myBar"></div>
+                </div>
                 <canvas id="result-resized-canvas"></canvas>
                 <p><a id="dl-result" href="#">Download</a></p>
             </div>
